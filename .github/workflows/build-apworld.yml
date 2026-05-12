@@ -1,0 +1,78 @@
+name: Build apworld
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to create or update. Defaults to oot-v<world_version>.
+        required: false
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build oot.apworld
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Package world
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p dist staging/oot
+          rsync -a \
+            --exclude '.git' \
+            --exclude '.github' \
+            --exclude 'dist' \
+            --exclude 'staging' \
+            --exclude '__pycache__' \
+            ./ staging/oot/
+
+          (cd staging && zip -r ../dist/oot.apworld oot)
+
+      - name: Choose release tag
+        id: release
+        shell: bash
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+          REF_TYPE: ${{ github.ref_type }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$REF_TYPE" == "tag" ]]; then
+            tag="$REF_NAME"
+          elif [[ -n "$INPUT_TAG" ]]; then
+            tag="$INPUT_TAG"
+          else
+            version="$(python -c 'import json; print(json.load(open("archipelago.json"))["world_version"])')"
+            tag="oot-v${version}"
+          fi
+
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/oot.apworld --clobber
+          else
+            gh release create "$TAG" dist/oot.apworld \
+              --draft \
+              --title "$TAG" \
+              --notes "Draft release for oot.apworld."
+          fi

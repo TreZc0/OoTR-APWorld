@@ -2,31 +2,32 @@ import asyncio
 import json
 import os
 import multiprocessing
-import subprocess
 import zipfile
 from asyncio import StreamReader, StreamWriter
 
 # CommonClient import first to trigger ModuleUpdater
 from CommonClient import CommonContext, server_loop, gui_enabled, \
     ClientCommandProcessor, logger, get_base_parser
-import Utils
-apname = Utils.instance_name if Utils.instance_name else "Archipelago"
-from Utils import async_start
+from Utils import async_start, init_logging
+try:
+    from Utils import instance_name as apname
+except ImportError:
+    apname = "Archipelago"
 from worlds import network_data_package
-from . import OOTWorld
-from .Rom import Rom, compress_rom_file
-from .N64Patch import apply_patch_file
+from .. import OOTWorld, launch_rom
+from ..Rom import Rom, compress_rom_file
+from ..N64Patch import apply_patch_file
 
 
-CONNECTION_TIMING_OUT_STATUS = "Connection timing out. Please restart your emulator, then restart connector_oot.lua"
-CONNECTION_REFUSED_STATUS = "Connection refused. Please start your emulator and make sure connector_oot.lua is running"
-CONNECTION_RESET_STATUS = "Connection was reset. Please restart your emulator, then restart connector_oot.lua"
+CONNECTION_TIMING_OUT_STATUS = "Connection timing out. Please restart your emulator."
+CONNECTION_REFUSED_STATUS = "Connection refused. Please start your emulator and load your OoT AP ROM."
+CONNECTION_RESET_STATUS = "Connection was reset. Please restart your emulator."
 CONNECTION_TENTATIVE_STATUS = "Initial Connection Made"
 CONNECTION_CONNECTED_STATUS = "Connected"
 CONNECTION_INITIAL_STATUS = "Connection has not been initiated"
 
 """
-Payload: lua -> client
+Payload: bridge -> client
 {
     playerName: string,
     locations: dict,
@@ -35,15 +36,12 @@ Payload: lua -> client
     gameComplete: bool
 }
 
-Payload: client -> lua
+Payload: client -> bridge
 {
     items: list,
     playerNames: list,
     triggerDeath: bool
 }
-
-Deathlink logic:
-"Dead" is true <-> Link is at 0 hp.
 
 deathlink_pending: we need to kill the player
 deathlink_sent_this_death: we interacted with the multiworld on this death, waiting to reset with living link
@@ -52,14 +50,14 @@ deathlink_sent_this_death: we interacted with the multiworld on this death, wait
 
 oot_loc_name_to_id = network_data_package["games"]["Ocarina of Time"]["location_name_to_id"]
 
-script_version: int = 5
+script_version: int = 7
 
 def get_item_value(ap_id):
     return ap_id - 66000
 
 
 class OoTCommandProcessor(ClientCommandProcessor):
-    def __init__(self, ctx): 
+    def __init__(self, ctx):
         super().__init__(ctx)
 
     def _cmd_n64(self):
@@ -103,7 +101,7 @@ class OoTContext(CommonContext):
             await super(OoTContext, self).server_auth(password_requested)
         if not self.auth:
             self.awaiting_rom = True
-            logger.info('Awaiting connection to EmuHawk to get player information')
+            logger.info('Awaiting connection to emulator to get player information')
             return
 
         await self.send_connect()
@@ -199,7 +197,7 @@ async def parse_payload(payload: dict, ctx: OoTContext, force: bool):
     locations = payload['locations']
     collectibles = payload['collectibles']
 
-    # The Lua JSON library serializes an empty table into a list instead of a dict. Verify types for safety:
+    # An empty table may be serialized as a list. Verify types for safety:
     if isinstance(locations, list):
         locations = {}
     if isinstance(collectibles, list):
@@ -210,7 +208,6 @@ async def parse_payload(payload: dict, ctx: OoTContext, force: bool):
         ctx.collectible_table = collectibles
         locs1 = []
 
-        # Debug code for now to identify connector issues
         unknown_locations = []
         for loc, checked in ctx.location_table.items():
             if not checked:
@@ -243,8 +240,8 @@ async def parse_payload(payload: dict, ctx: OoTContext, force: bool):
             ctx.deathlink_sent_this_death = False
 
 
-async def n64_sync_task(ctx: OoTContext): 
-    logger.info("Starting n64 connector. Use /n64 for status information.")
+async def n64_sync_task(ctx: OoTContext):
+    logger.info("Starting N64 connector. Use /n64 for status information.")
     while not ctx.exit_event.is_set():
         error_status = None
         if ctx.n64_streams:
@@ -256,6 +253,8 @@ async def n64_sync_task(ctx: OoTContext):
                 await asyncio.wait_for(writer.drain(), timeout=1.5)
                 try:
                     data = await asyncio.wait_for(reader.readline(), timeout=10)
+                    if not data:
+                        raise ConnectionResetError
                     data_decoded = json.loads(data.decode())
                     reported_version = data_decoded.get('scriptVersion', 0)
                     if reported_version >= script_version:
@@ -271,27 +270,23 @@ async def n64_sync_task(ctx: OoTContext):
                                 await ctx.server_auth(False)
                     else:
                         if not ctx.version_warning:
-                            logger.warning(f"Your Lua script is version {reported_version}, expected {script_version}. "
+                            logger.warning(f"Bridge script version {reported_version}, expected {script_version}. "
                                 "Please update to the latest version. "
-                                "Your connection to the MultiworldGG server will not be accepted.")
+                                f"Your connection to the {apname} server will not be accepted.")
                             ctx.version_warning = True
                 except asyncio.TimeoutError:
-                    logger.debug("Read Timed Out, Reconnecting")
                     error_status = CONNECTION_TIMING_OUT_STATUS
                     writer.close()
                     ctx.n64_streams = None
                 except ConnectionResetError as e:
-                    logger.debug("Read failed due to Connection Lost, Reconnecting")
                     error_status = CONNECTION_RESET_STATUS
                     writer.close()
                     ctx.n64_streams = None
             except TimeoutError:
-                logger.debug("Connection Timed Out, Reconnecting")
                 error_status = CONNECTION_TIMING_OUT_STATUS
                 writer.close()
                 ctx.n64_streams = None
             except ConnectionResetError:
-                logger.debug("Connection Lost, Reconnecting")
                 error_status = CONNECTION_RESET_STATUS
                 writer.close()
                 ctx.n64_streams = None
@@ -302,41 +297,26 @@ async def n64_sync_task(ctx: OoTContext):
                 else:
                     ctx.n64_status = f"Was tentatively connected but error occured: {error_status}"
             elif error_status:
+                if ctx.n64_status != error_status:
+                    logger.info("Lost connection to N64 and attempting to reconnect. Use /n64 for status updates")
                 ctx.n64_status = error_status
-                logger.info("Lost connection to N64 and attempting to reconnect. Use /n64 for status updates")
+            if error_status:
+                await asyncio.sleep(1)
         else:
             try:
-                logger.debug("Attempting to connect to N64")
                 ctx.n64_streams = await asyncio.wait_for(asyncio.open_connection("localhost", 28921), timeout=10)
                 ctx.n64_status = CONNECTION_TENTATIVE_STATUS
             except TimeoutError:
-                logger.debug("Connection Timed Out, Trying Again")
                 ctx.n64_status = CONNECTION_TIMING_OUT_STATUS
                 continue
             except ConnectionRefusedError:
-                logger.debug("Connection Refused, Trying Again")
                 ctx.n64_status = CONNECTION_REFUSED_STATUS
                 await asyncio.sleep(1)
                 continue
 
 
 async def run_game(romfile):
-    import settings as ap_settings
-    auto_start = OOTWorld.settings.rom_start
-    if auto_start is True:
-        emuhawk_path = ap_settings.get_settings().bizhawkclient_options.emuhawk_path
-        subprocess.Popen(
-            [
-                emuhawk_path,
-                f"--lua={Utils.local_path('data', 'lua', 'connector_oot.lua')}",
-                os.path.realpath(romfile),
-            ],
-            cwd=Utils.local_path("."),
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        )
-    elif os.path.isfile(auto_start):
-        subprocess.Popen([auto_start, romfile],
-                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    launch_rom(romfile, logger)
 
 
 async def patch_and_run_game(apz5_file):
@@ -344,7 +324,6 @@ async def patch_and_run_game(apz5_file):
     base_name = os.path.splitext(apz5_file)[0]
     decomp_path = base_name + '-decomp.z64'
     comp_path = base_name + '.z64'
-    # Load vanilla ROM, patch file, compress ROM
     rom_file_name = OOTWorld.settings.rom_file
     rom = Rom(rom_file_name)
 
@@ -364,7 +343,7 @@ async def patch_and_run_game(apz5_file):
 
 def main(*launcher_args: str):
 
-    Utils.init_logging("OoTClient")
+    init_logging("OoTClient")
 
     async def main():
         multiprocessing.freeze_support()
@@ -382,6 +361,10 @@ def main(*launcher_args: str):
         if gui_enabled:
             ctx.run_gui()
         ctx.run_cli()
+
+        # Start the native emulator bridge (serves on localhost:28921)
+        from .bridge import n64_bridge_task
+        asyncio.create_task(n64_bridge_task(ctx), name="N64 Bridge")
 
         ctx.n64_sync_task = asyncio.create_task(n64_sync_task(ctx), name="N64 Sync")
 

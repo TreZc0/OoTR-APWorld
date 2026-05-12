@@ -7,7 +7,7 @@ from itertools import chain
 
 from BaseClasses import MultiWorld
 from Options import Choice, Range, Toggle
-from worlds.oot import OOTWorld
+from worlds.oot import OOTWorld, launch_rom as launch_oot_rom
 from worlds.oot.Cosmetics import patch_cosmetics
 from worlds.oot.Options import (cosmetic_options, sfx_options,
     DpadDungeonMenu, SpeedupMusicForLastTriforcePiece, SlowdownMusicWhenLowhp,
@@ -17,6 +17,11 @@ from worlds.oot.N64Patch import apply_patch_file
 from Utils import local_path, user_path
 
 logger = logging.getLogger('OoTAdjuster')
+
+
+def launch_rom(path: str) -> None:
+    launch_oot_rom(path, logger)
+
 
 def main(launcher_args):
     parser = argparse.ArgumentParser()
@@ -256,25 +261,9 @@ def adjustGUI():
             logging.exception(e)
             messagebox.showerror(title="Error while adjusting Rom", message=str(e))
         else:
-            import subprocess
-            import settings as ap_settings
             from worlds.LauncherComponents import launch_subprocess
-            from worlds.oot.Client import main as client_main
-            auto_start = OOTWorld.settings.rom_start
-            if auto_start is True:
-                emuhawk_path = ap_settings.get_settings().bizhawkclient_options.emuhawk_path
-                subprocess.Popen(
-                    [
-                        emuhawk_path,
-                        f"--lua={local_path('data', 'lua', 'connector_oot.lua')}",
-                        os.path.realpath(path),
-                    ],
-                    cwd=local_path("."),
-                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                )
-            elif os.path.isfile(auto_start):
-                subprocess.Popen([auto_start, path],
-                                 stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            from worlds.oot.client import main as client_main
+            launch_rom(path)
             launch_subprocess(client_main, name="OoTClient")
             messagebox.showinfo(title="Success", message=f"Rom adjusted to {path}")
 
