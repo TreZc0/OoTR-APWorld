@@ -20,7 +20,7 @@ from .Regions import OOTRegion, TimeOfDay
 from .Rules import set_rules, set_shop_rules, set_entrances_based_rules
 from .RuleParser import Rule_AST_Transformer
 from .Options import OoTOptions, oot_option_groups
-from .Utils import data_path, read_json
+from .Utils import data_path, read_json, __version__ as oot_version
 from .LocationList import business_scrubs, set_drop_location_names, dungeon_song_locations
 from .DungeonList import dungeon_table, create_dungeons
 from .LogicTricks import normalized_name_tricks, normalized_name_advanced_tricks
@@ -68,14 +68,14 @@ class _OOTDistribution:
     def configure_songs(self):
         return {}
 
-
 def launch_client(*args):
     from .client import main
     launch_component(main, name="OoTClient", args=args)
 
 
-components.append(Component(display_name="OoT Client", func=launch_client, component_type=Type.CLIENT,
-                            file_identifier=SuffixIdentifier('.apz5')))
+components.append(Component(display_name="Ocarina of Time Client", func=launch_client, component_type=Type.CLIENT,
+                            file_identifier=SuffixIdentifier('.apz5'),
+                            description=f"Connect to an OoT multiworld using OoT APWorld {oot_version}."))
 
 
 def launch_adjuster(*args):
@@ -83,7 +83,8 @@ def launch_adjuster(*args):
     launch_component(launch, name="OoTAdjuster", args=args)
 
 
-components.append(Component(display_name="OoT Adjuster", component_type=Type.ADJUSTER, func=launch_adjuster,description="Change Cosmetics and SFX for your OoT Seed"))
+components.append(Component(display_name="Ocarina of Time Adjuster", component_type=Type.ADJUSTER, func=launch_adjuster,
+                            description=f"Change Cosmetics and SFX for your OoT Seed using OoT APWorld {oot_version}."))
 
 
 class OOTCollectionState(metaclass=AutoLogicRegister):
@@ -134,13 +135,16 @@ class OOTCollectionState(metaclass=AutoLogicRegister):
 
 class OOTSettings(settings.Group):
     class RomFile(settings.UserFilePath):
-        """File name of the OoT v1.0 ROM"""
+        """File name of the OoT v1.0 NTSC-U or NTSC-J ROM"""
         description = "Ocarina of Time ROM File"
         copy_to = "The Legend of Zelda - Ocarina of Time.z64"
         md5s = [
-            "5bd1fe107bf8106b2ab6650abecd54d6",  # normal
-            "6697768a7a7df2dd27a692a2638ea90b",  # byte-swapped
-            "05f0f3ebacbc8df9243b6148ffe4792f",  # decompressed
+            "5bd1fe107bf8106b2ab6650abecd54d6",  # NTSC-U z64
+            "6697768a7a7df2dd27a692a2638ea90b",  # NTSC-U n64, byte-swapped
+            "05f0f3ebacbc8df9243b6148ffe4792f",  # NTSC-U decompressed z64
+            "9f04c8e68534b870f707c247fa4b50fc",  # NTSC-J z64
+            "7d44b555e0af3eec36319b5e76e31b0c",  # NTSC-J n64, byte-swapped
+            "a6090ade6efb0490f5e74838d47bbfac",  # NTSC-J decompressed z64
         ]
 
     class RomStart(str):

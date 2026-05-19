@@ -17,7 +17,7 @@ from worlds import network_data_package
 from .. import OOTWorld, launch_rom
 from ..Rom import Rom, compress_rom_file
 from ..N64Patch import apply_patch_file
-
+from ..Utils import __version__ as oot_version
 
 CONNECTION_TIMING_OUT_STATUS = "Connection timing out. Please restart your emulator."
 CONNECTION_REFUSED_STATUS = "Connection refused. Please start your emulator and load your OoT AP ROM."
@@ -117,7 +117,7 @@ class OoTContext(CommonContext):
             logging_pairs = [
                 ("Client", "Archipelago")
             ]
-            base_title = apname + " Ocarina of Time Client"
+            base_title = f"Ocarina of Time Client (OoT APWorld {oot_version}) | {apname}"
 
         self.ui = OoTManager(self)
         self.ui_task = asyncio.create_task(self.ui.async_run(), name="UI")

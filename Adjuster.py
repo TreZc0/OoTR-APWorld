@@ -7,17 +7,17 @@ from itertools import chain
 
 from BaseClasses import MultiWorld
 from Options import Choice, Range, Toggle
-from worlds.oot import OOTWorld, launch_rom as launch_oot_rom
-from worlds.oot.Cosmetics import patch_cosmetics
-from worlds.oot.Options import (cosmetic_options, sfx_options,
+from . import OOTWorld, launch_rom as launch_oot_rom
+from .Cosmetics import patch_cosmetics
+from .Options import (cosmetic_options, sfx_options,
     DpadDungeonMenu, SpeedupMusicForLastTriforcePiece, SlowdownMusicWhenLowhp,
     UninvertYAxisInFirstPersonCamera, InputViewer, DisableBattleMusic, CreditsMusic)
-from worlds.oot.Rom import Rom, compress_rom_file
-from worlds.oot.N64Patch import apply_patch_file
+from .Rom import Rom, compress_rom_file
+from .N64Patch import apply_patch_file
+from .Utils import __version__ as oot_version
 from Utils import local_path, user_path
 
 logger = logging.getLogger('OoTAdjuster')
-
 
 def launch_rom(path: str) -> None:
     launch_oot_rom(path, logger)
@@ -60,7 +60,7 @@ def adjustGUI():
         apname = "Archipelago"
 
     window = tk.Tk()
-    window.wm_title(f"{apname} {MWVersion} OoT Adjuster")
+    window.wm_title(f"Ocarina of Time Adjuster (OoT APWorld {oot_version}) | {apname} {MWVersion}")
     set_icon(window)
 
     opts = Namespace()
@@ -108,7 +108,7 @@ def adjustGUI():
     musicFolderEntry.pack(side=LEFT, expand=True, fill=X)
     musicFolderButton.pack(side=LEFT)
 
-    from worlds.oot.Models import get_model_choices
+    from .Models import get_model_choices
 
     adultModelFrame = Frame(window)
     adultModelLabel = Label(adultModelFrame, text='Adult Link Model')
@@ -262,7 +262,7 @@ def adjustGUI():
             messagebox.showerror(title="Error while adjusting Rom", message=str(e))
         else:
             from worlds.LauncherComponents import launch_subprocess
-            from worlds.oot.client import main as client_main
+            from .client import main as client_main
             launch_rom(path)
             launch_subprocess(client_main, name="OoTClient")
             messagebox.showinfo(title="Success", message=f"Rom adjusted to {path}")
