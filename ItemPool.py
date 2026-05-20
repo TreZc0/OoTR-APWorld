@@ -379,6 +379,7 @@ def get_pool_core(world):
     placed_items = {}
     remain_shop_items = []
     ruto_bottles = 1
+    blue_potions = 1
     ganon_bk_setting = world.shuffle_ganon_bosskey
 
     if world.zora_fountain == 'open':
@@ -421,7 +422,7 @@ def get_pool_core(world):
                     pending_junk_pool.append(f"Small Key ({dungeon})")
         if world.shuffle_bosskeys in ['any_dungeon', 'overworld', 'keysanity', 'regional']:
             for dungeon in ['Forest Temple', 'Fire Temple', 'Water Temple', 'Shadow Temple', 'Spirit Temple']:
-                if not world.keyring_give_bk(dungeon):
+                if not world.keyring_gives_boss_key(dungeon):
                     pending_junk_pool.append(f"Boss Key ({dungeon})")
         if ganon_bk_setting in ['any_dungeon', 'overworld', 'keysanity', 'regional']:
             pending_junk_pool.append('Boss Key (Ganons Castle)')
@@ -449,6 +450,24 @@ def get_pool_core(world):
     if world.shuffle_individual_ocarina_notes:
         pending_junk_pool.extend(ocarina_button_items)
 
+    def pot_shuffle_enabled(location):
+        if world.shuffle_pots == 'all':
+            return True
+        if world.shuffle_pots == 'dungeons' and (location.dungeon is not None or location.parent_region.is_boss_room):
+            return True
+        if world.shuffle_pots == 'overworld' and not (location.dungeon is not None or location.parent_region.is_boss_room):
+            return True
+        return False
+
+    def crate_shuffle_enabled(location):
+        if world.shuffle_crates == 'all':
+            return True
+        if world.shuffle_crates == 'dungeons' and location.dungeon is not None:
+            return True
+        if world.shuffle_crates == 'overworld' and location.dungeon is None:
+            return True
+        return False
+
     # Use the vanilla items in the world's locations when appropriate.
     for location in world.get_locations():
         if location.vanilla_item is None:
@@ -457,9 +476,15 @@ def get_pool_core(world):
         item = location.vanilla_item
         shuffle_item = None  # None for don't handle, False for place item, True for add to pool.
 
-        # Locations whose vanilla drop is nothing (empty pots/crates) are never shuffled
-        # here because there is no upstream shuffle_empty_X option ported yet.
-        if location.vanilla_item == 'Nothing':
+        # Empty pots/crates are only real locations when explicitly included.
+        if location.vanilla_item == 'Nothing' and not (
+            (location.type in ['Pot', 'FlyingPot']
+             and world.shuffle_empty_pots
+             and pot_shuffle_enabled(location))
+            or (location.type in ['Crate', 'SmallCrate']
+                and world.shuffle_empty_crates
+                and crate_shuffle_enabled(location))
+        ):
             location.disabled = DisableType.DISABLED
             location.show_in_spoiler = False
             placed_items[location.name] = IGNORE_LOCATION
@@ -524,7 +549,7 @@ def get_pool_core(world):
 
         # Giant's Knife
         elif location.vanilla_item == 'Giants Knife':
-            shuffle_item = world.shuffle_medigoron_carpet_salesman
+            shuffle_item = world.shuffle_expensive_merchants
             if not shuffle_item:
                 location.show_in_spoiler = False
 
@@ -537,8 +562,17 @@ def get_pool_core(world):
         elif location.vanilla_item in ['Bombchus', 'Bombchus (5)', 'Bombchus (10)', 'Bombchus (20)']:
             if world.free_bombchu_drops:
                 item = 'Bombchus'
-            shuffle_item = location.name != 'Wasteland Bombchu Salesman' or world.shuffle_medigoron_carpet_salesman
+            shuffle_item = location.name != 'Wasteland Bombchu Salesman' or world.shuffle_expensive_merchants
             if not shuffle_item:
+                location.show_in_spoiler = False
+
+        # Blue Potion from Granny's Potion Shop
+        elif location.vanilla_item == 'Blue Potion':
+            shuffle_item = world.shuffle_expensive_merchants
+            if shuffle_item:
+                # One shuffled bottle becomes a blue potion to preserve the unique merchant's vanilla value.
+                item = get_junk_item(world.random)[0]
+            else:
                 location.show_in_spoiler = False
 
         # Cows
@@ -562,6 +596,9 @@ def get_pool_core(world):
             if ruto_bottles:
                 item = 'Rutos Letter'
                 ruto_bottles -= 1
+            elif world.shuffle_expensive_merchants and blue_potions:
+                item = 'Bottle with Blue Potion'
+                blue_potions -= 1
             else:
                 item = world.random.choice(normal_bottles)
             shuffle_item = True
@@ -642,11 +679,7 @@ def get_pool_core(world):
 
         # Pots
         elif location.type in ['Pot', 'FlyingPot']:
-            if world.shuffle_pots == 'all':
-                shuffle_item = True
-            elif world.shuffle_pots == 'dungeons' and (location.dungeon is not None or location.parent_region.is_boss_room):
-                shuffle_item = True
-            elif world.shuffle_pots == 'overworld' and not (location.dungeon is not None or location.parent_region.is_boss_room):
+            if pot_shuffle_enabled(location) and (location.vanilla_item != 'Nothing' or world.shuffle_empty_pots):
                 shuffle_item = True
             else:
                 shuffle_item = False
@@ -655,13 +688,8 @@ def get_pool_core(world):
 
         # Crates
         elif location.type in ['Crate', 'SmallCrate']:
-            if world.shuffle_crates == 'all':
-                shuffle_item = True
-            elif world.shuffle_crates == 'dungeons' and location.dungeon is not None:
-                shuffle_item = True
-            elif world.shuffle_crates == 'overworld' and location.dungeon is None:
-                shuffle_item = True
-            else:
+            shuffle_item = crate_shuffle_enabled(location)
+            if not shuffle_item:
                 shuffle_item = False
                 location.disabled = DisableType.DISABLED
                 location.show_in_spoiler = False
@@ -707,7 +735,7 @@ def get_pool_core(world):
 
             # Boss Key
             if location.vanilla_item == dungeon.item_name("Boss Key"):
-                if world.keyring_give_bk(dungeon.name):
+                if world.keyring_gives_boss_key(dungeon.name):
                     item = get_junk_item(world.random)[0]
                     shuffle_item = True
                 else:

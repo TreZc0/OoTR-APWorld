@@ -1,4 +1,6 @@
 *.z64
+__pycache__/
+**/__pycache__/
 ASM/roms/*.z64
 ASM/tools/armips
 data/Compress/ARCHIVE.bin

@@ -19,7 +19,7 @@ from .ItemPool import generate_itempool, get_junk_item, get_junk_pool
 from .Regions import OOTRegion, TimeOfDay
 from .Rules import set_rules, set_shop_rules, set_entrances_based_rules
 from .RuleParser import Rule_AST_Transformer
-from .Options import OoTOptions, oot_option_groups
+from .Options import EmptyDungeonList, OoTOptions, oot_option_groups
 from .Utils import data_path, read_json, __version__ as oot_version
 from .LocationList import business_scrubs, set_drop_location_names, dungeon_song_locations
 from .DungeonList import dungeon_table, create_dungeons
@@ -364,15 +364,15 @@ class OOTWorld(World):
         if self.triforce_hunt:
             self.shuffle_ganon_bosskey = 'triforce'
 
-        # Force itempool to higher settings if it doesn't have enough hearts
+        # Force itempool to higher settings if it doesn't have enough collectible hearts.
         max_required_hearts = 3
         if self.bridge == 'hearts':
             max_required_hearts = max(max_required_hearts, self.bridge_hearts)
         if self.shuffle_ganon_bosskey == 'hearts':
             max_required_hearts = max(max_required_hearts, self.ganon_bosskey_hearts)
-        if max_required_hearts > 3 and self.item_pool_value == 'minimal':
+        if max_required_hearts > self.starting_hearts and self.item_pool_value == 'minimal':
             self.item_pool_value = 'scarce'
-        if max_required_hearts > 12 and self.item_pool_value == 'scarce':
+        if max_required_hearts > self.starting_hearts + 9 and self.item_pool_value == 'scarce':
             self.item_pool_value = 'balanced'
 
         # If songs/keys locked to own world by settings, add them to local_items
@@ -410,7 +410,7 @@ class OOTWorld(World):
 
         # Determine tricks in logic
         if self.logic_rules in ('glitchless', 'advanced'):
-            for trick in self.logic_tricks:
+            for trick in self.allowed_tricks:
                 normalized_name = trick.casefold()
                 if normalized_name in normalized_name_tricks:
                     setattr(self, normalized_name_tricks[normalized_name]['name'], True)
@@ -455,6 +455,13 @@ class OOTWorld(World):
         self.keysanity = self.shuffle_smallkeys in ['keysanity', 'remove', 'any_dungeon', 'overworld']
         self.trials_random = self.options.trials.randomized
         self.mq_dungeons_random = self.options.mq_dungeons_count.randomized
+        if (self.options.special_deal_price_min.randomized
+                and self.options.special_deal_price_max.randomized
+                and self.special_deal_price_min > self.special_deal_price_max):
+            self.special_deal_price_min, self.special_deal_price_max = (
+                self.special_deal_price_max, self.special_deal_price_min)
+            self.options.special_deal_price_min.value = self.special_deal_price_min
+            self.options.special_deal_price_max.value = self.special_deal_price_max
         if not self.easier_fire_arrow_entry:
             self.fae_torch_count = 24
 
@@ -514,7 +521,7 @@ class OOTWorld(World):
         self.key_rings_list          = {s.replace("'", "") for s in self.key_rings_list}
         self.dungeon_shortcuts       = {s.replace("'", "") for s in self.dungeon_shortcuts_list}
         self.mq_dungeons_specific    = {s.replace("'", "") for s in self.mq_dungeons_list}
-        # self.empty_dungeons_specific = {s.replace("'", "") for s in self.empty_dungeons_list}
+        self.empty_dungeons_specific = {s.replace("'", "") for s in self.empty_dungeons_list}
 
         # Determine which dungeons have key rings.
         keyring_dungeons = [d['name'] for d in dungeon_table if d['small_key']] + ['Thieves Hideout', 'Treasure Chest Game']
@@ -522,7 +529,7 @@ class OOTWorld(World):
             self.key_rings = []
         elif self.key_rings == 'all':
             self.key_rings = keyring_dungeons
-        elif self.key_rings == 'choose':
+        elif self.key_rings == 'choice':
             self.key_rings = self.key_rings_list
         elif self.key_rings == 'random_dungeons':
             self.key_rings = self.random.sample(keyring_dungeons,
@@ -540,8 +547,15 @@ class OOTWorld(World):
         self.dungeon_mq = {item['name']: (item['name'] in mq_dungeons) for item in dungeon_table}
         self.dungeon_mq['Thieves Hideout'] = False  # fix for bug in SaveContext:287
 
-        # Precompleted dungeon placeholder for the moment
-        self.precompleted_dungeons = {name: False for name in self.dungeon_mq}
+        # Determine which reward dungeons are pre-completed.
+        empty_dungeon_pool = self.get_empty_dungeon_pool()
+        empty_dungeons = set()
+        if self.empty_dungeons_mode == 'specific':
+            empty_dungeons = self.empty_dungeons_specific
+        elif self.empty_dungeons_mode == 'count':
+            empty_dungeons = set(self.random.sample(empty_dungeon_pool, self.empty_dungeons_count))
+        self.precompleted_dungeons = {name: (name in empty_dungeons) for name in empty_dungeon_pool}
+        self.empty_dungeon_starting_rewards = []
 
         # Determine which dungeons have shortcuts.
         shortcut_dungeons = ['Deku Tree', 'Dodongos Cavern', \
@@ -639,7 +653,11 @@ class OOTWorld(World):
                 'Bombchus (10)',
                 'Bombchus (20)',
             })
-        if not (self.bridge == 'hearts' or self.shuffle_ganon_bosskey == 'hearts'):
+        heart_requirement_needs_pool = (
+            self.bridge == 'hearts' and self.bridge_hearts > self.starting_hearts
+            or self.shuffle_ganon_bosskey == 'hearts' and self.ganon_bosskey_hearts > self.starting_hearts
+        )
+        if not heart_requirement_needs_pool:
             self.nonadvancement_items.update({
                 'Heart Container',
                 'Piece of Heart',
@@ -813,7 +831,8 @@ class OOTWorld(World):
             return
 
         if mode == 'reward':
-            reward_name = self.random.choice(sorted(self.item_name_groups['rewards']))
+            reward_name = self.random.choice(sorted(
+                self.item_name_groups['rewards'] - set(getattr(self, 'empty_dungeon_starting_rewards', []))))
             self.rauru_starting_item = reward_name
             self._claim_rauru_starting(reward_name, rauru_location)
             return
@@ -829,7 +848,8 @@ class OOTWorld(World):
 
         # any_dungeon / overworld / anywhere
         if self.skip_reward_from_rauru == 'free_forced':
-            chosen = self.random.choice(sorted(self.item_name_groups['rewards']))
+            chosen = self.random.choice(sorted(
+                self.item_name_groups['rewards'] - set(getattr(self, 'empty_dungeon_starting_rewards', []))))
             self.rauru_starting_item = chosen
             self._claim_rauru_starting(chosen, rauru_location)
             return
@@ -853,6 +873,80 @@ class OOTWorld(World):
             self.remove_from_start_inventory.append('Time Travel')
 
 
+    @staticmethod
+    def get_empty_dungeon_pool():
+        empty_dungeon_names = {name.replace("'", "") for name in EmptyDungeonList.valid_keys}
+        return [dungeon['name'] for dungeon in dungeon_table if dungeon['name'] in empty_dungeon_names]
+
+
+    def get_empty_dungeon_reward_locations(self):
+        reward_locations = {}
+        for location in self.get_locations():
+            if location.type != 'Boss' or location.vanilla_item not in self.item_name_groups['rewards']:
+                continue
+            try:
+                dungeon_name = HintArea.at(location).dungeon_name
+            except HintAreaNotFound:
+                continue
+            if dungeon_name in self.precompleted_dungeons:
+                reward_locations[dungeon_name] = location
+        return reward_locations
+
+
+    def prepare_empty_dungeon_rewards(self):
+        self.empty_dungeon_starting_rewards = []
+        self.empty_dungeon_reward_location_names = set()
+        if self.empty_dungeons_mode == 'none':
+            return
+
+        reward_locations = self.get_empty_dungeon_reward_locations()
+        empty_reward_locations = [
+            reward_locations[dungeon]
+            for dungeon, is_empty in self.precompleted_dungeons.items()
+            if is_empty
+        ]
+        if not empty_reward_locations:
+            return
+
+        if self.shuffle_dungeon_rewards == 'reward':
+            reward_pool = sorted(self.item_name_groups['rewards'])
+            self.random.shuffle(reward_pool)
+            reward_names = reward_pool[:len(empty_reward_locations)]
+        else:
+            reward_names = [loc.vanilla_item for loc in empty_reward_locations]
+
+        for reward_name, location in zip(reward_names, empty_reward_locations):
+            self.empty_dungeon_starting_rewards.append(reward_name)
+            self.empty_dungeon_reward_location_names.add(location.name)
+            self.hinted_dungeon_reward_locations[reward_name] = None
+            self.multiworld.push_precollected(self.create_item(reward_name))
+            location.place_locked_item(self.create_item('Recovery Heart'))
+            location.address = None
+            location.show_in_spoiler = False
+
+
+    def add_starting_hearts(self):
+        if self.starting_hearts <= 3:
+            return
+        if self.options.start_inventory.value.get('Piece of Heart', 0) or self.options.start_inventory.value.get('Heart Container', 0):
+            return
+
+        hearts_to_collect = self.starting_hearts - 3
+        if self.item_pool_value == 'plentiful':
+            if self.starting_hearts >= 20:
+                hearts_to_collect -= 1
+                for _ in range(4):
+                    self.multiworld.push_precollected(self.create_item('Piece of Heart'))
+            for _ in range(hearts_to_collect):
+                self.multiworld.push_precollected(self.create_item('Heart Container'))
+            return
+
+        for _ in range(4 * ((hearts_to_collect + 1) // 2)):
+            self.multiworld.push_precollected(self.create_item('Piece of Heart'))
+        for _ in range(hearts_to_collect // 2):
+            self.multiworld.push_precollected(self.create_item('Heart Container'))
+
+
     def fill_bosses(self):
         mode = self.shuffle_dungeon_rewards
         if mode not in ('vanilla', 'reward'):
@@ -869,6 +963,10 @@ class OOTWorld(World):
             'Twinrova',
             'ToT Reward from Rauru'
         ]
+        boss_location_names = [
+            loc_name for loc_name in boss_location_names
+            if loc_name not in getattr(self, 'empty_dungeon_reward_location_names', set())
+        ]
         rauru_starting_item = self.rauru_starting_item
         if rauru_starting_item is not None:
             boss_location_names.remove('ToT Reward from Rauru')
@@ -879,6 +977,7 @@ class OOTWorld(World):
         placed_prizes = [loc.item.name for loc in boss_locations if loc.item is not None]
         if rauru_starting_item is not None:
             placed_prizes.append(rauru_starting_item)
+        placed_prizes.extend(getattr(self, 'empty_dungeon_starting_rewards', []))
         prizepool = [item for item in boss_rewards if item.name not in placed_prizes]
         prize_locs = [loc for loc in boss_locations if loc.item is None]
 
@@ -992,6 +1091,8 @@ class OOTWorld(World):
     def create_items(self):
         # Generate itempool
         generate_itempool(self)
+        self.prepare_empty_dungeon_rewards()
+        self.add_starting_hearts()
         self.prepare_rauru_reward()
 
         junk_pool = get_junk_pool(self)
@@ -1148,7 +1249,11 @@ class OOTWorld(World):
             elif self.bridge == 'tokens':
                 ganon_junk_fill = self.bridge_tokens / 100
             elif self.bridge == 'hearts':
-                ganon_junk_fill = self.bridge_hearts / 20
+                remaining_hearts = 20 - self.starting_hearts
+                ganon_junk_fill = (
+                    max(0, self.bridge_hearts - self.starting_hearts) / remaining_hearts
+                    if remaining_hearts else 0
+                )
             elif self.bridge == 'open':
                 ganon_junk_fill = 0
             else:
@@ -1167,6 +1272,49 @@ class OOTWorld(World):
                 loc.address = None
 
         self.remove_excess_junk_from_itempool()
+
+
+    def fill_hook(self, progitempool, usefulitempool, filleritempool, fill_locations):
+        if self.empty_dungeons_mode == 'none':
+            return
+
+        empty_locations = []
+        for location in fill_locations:
+            if location.player != self.player or location.item is not None:
+                continue
+            try:
+                dungeon_name = HintArea.at(location).dungeon_name
+            except HintAreaNotFound:
+                continue
+            if self.precompleted_dungeons.get(dungeon_name, False):
+                empty_locations.append(location)
+
+        if not empty_locations:
+            return
+
+        nonprogression_items = [
+            item for item in filleritempool
+            if item.player == self.player
+        ]
+        if len(nonprogression_items) < len(empty_locations):
+            nonprogression_items.extend(
+                item for item in usefulitempool
+                if item.player == self.player and not item.advancement
+            )
+        if len(nonprogression_items) < len(empty_locations):
+            raise FillError(
+                f"OoT (Player {self.player}): not enough local non-progression items to fill "
+                f"pre-completed dungeons.")
+
+        self.random.shuffle(empty_locations)
+        self.random.shuffle(nonprogression_items)
+        for location, item in zip(empty_locations, nonprogression_items):
+            if item in filleritempool:
+                filleritempool.remove(item)
+            else:
+                usefulitempool.remove(item)
+            fill_locations.remove(location)
+            self.multiworld.push_item(location, item, collect=False)
 
 
     def pre_fill(self):
@@ -1580,19 +1728,22 @@ class OOTWorld(World):
             "special_deal_price_max", "tokensanity",
             "dungeon_shortcuts", "dungeon_shortcuts_list",
             "mq_dungeons_mode", "mq_dungeons_list", "mq_dungeons_count",
+            "empty_dungeons_mode", "empty_dungeons_list", "empty_dungeons_count",
             "shuffle_interior_entrances", "shuffle_grotto_entrances", "shuffle_dungeon_entrances",
             "shuffle_overworld_entrances", "shuffle_bosses", "shuffle_ganon_tower", "key_rings", "key_rings_list", "enhance_map_compass",
             "shuffle_map", "shuffle_compass", "shuffle_smallkeys", "shuffle_hideoutkeys", "shuffle_bosskeys",
-            "logic_rules", "logic_no_night_tokens_without_suns_song", "logic_tricks", "advanced_allowed_tricks",
-            "warp_songs", "shuffle_song_items", "ocarina_songs", "shuffle_medigoron_carpet_salesman", "shuffle_frog_song_rupees",
+            "logic_rules", "logic_no_night_tokens_without_suns_song", "allowed_tricks", "advanced_allowed_tricks",
+            "warp_songs", "shuffle_song_items", "ocarina_songs", "shuffle_expensive_merchants",
+            "shuffle_frog_song_rupees",
             "shuffle_100_skulltula_rupee",
-            "shuffle_scrubs", "shuffle_child_trade", "shuffle_freestanding_items", "shuffle_pots", "shuffle_crates",
+            "shuffle_scrubs", "shuffle_child_trade", "shuffle_freestanding_items", "shuffle_pots", "shuffle_empty_pots", "shuffle_crates",
+            "shuffle_empty_crates",
             "shuffle_cows", "shuffle_beehives", "shuffle_wonderitems", "shuffle_kokiri_sword", "shuffle_ocarinas", "shuffle_gerudo_card",
             "shuffle_beans", "shuffle_gerudo_fortress_heart_piece", "starting_age", "free_bombchu_drops", "spawn_positions", "owl_drops",
             "no_epona_race", "skip_some_minigame_phases", "complete_mask_quest", "scarecrow_behavior", "plant_beans", "easier_fire_arrow_entry", "fast_shadow_boat", "skip_reward_from_rauru",
             "chicken_count", "big_poe_count", "fae_torch_count", "blue_fire_arrows",
             "damage_multiplier", "deadly_bonks", "starting_tod", "junk_ice_traps", "custom_ice_trap_count", "custom_ice_trap_percent",
-            "start_with_consumables", "add_random_starting_items", "random_starting_items_count",
+            "start_with_consumables", "starting_hearts", "add_random_starting_items", "random_starting_items_count",
             "random_starting_items_exclude", "adult_trade_start", "plando_connections"
             )
         )
@@ -1686,10 +1837,10 @@ class OOTWorld(World):
     # Key rings are multiple items glued together into one, so we need to give
     # the appropriate number of keys in the collection state when they are
     # picked up.
-    def keyring_give_bk(self, dungeon_name: str) -> bool:
+    def keyring_gives_boss_key(self, dungeon_name: str) -> bool:
         return (
             dungeon_name in {'Forest Temple', 'Fire Temple', 'Water Temple', 'Shadow Temple', 'Spirit Temple'}
-            and self.key_rings_give_bosskeys
+            and self.keyring_give_bk
             and dungeon_name in self.key_rings
             and self.shuffle_smallkeys != 'vanilla'
         )
@@ -1698,7 +1849,7 @@ class OOTWorld(World):
         if not item.name.startswith('Small Key Ring (') or not item.name.endswith(')'):
             return None
         dungeon_name = item.name[:-1].split(' (', 1)[1]
-        if not self.keyring_give_bk(dungeon_name):
+        if not self.keyring_gives_boss_key(dungeon_name):
             return None
         return f'Boss Key ({dungeon_name})'
 

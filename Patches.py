@@ -12,10 +12,9 @@ from .Items import OOTItem, item_table
 from .ItemPool import trade_items
 from .Location import DisableType
 from .LocationList import business_scrubs
-from .HintList import getHint
 from .Hints import writeGossipStoneHints, buildAltarHints, \
-        buildGanonText, getSimpleHintNoPrefix, HintArea, getItemGenericName, \
-        buildMiscItemHints, buildMiscLocationHints, buildMiscDualHints
+        buildGanonText, getSimpleHintNoPrefix, HintArea, \
+        buildMiscItemHints, buildMiscLocationHints, buildMiscDualHints, get_item_hint_text
 from .Utils import data_path, encode_oot_player_name
 try:
     from Utils import instance_name as apname
@@ -132,7 +131,7 @@ def patch_rom(world, rom):
         ('object_gi_ap_triforce_fill', data_path('items/Triforce.zobj'), AP_JUNK_OBJECT, AP_TRIFORCE_GREY_PATCHES),  # AP filler
     ]
 
-    if world.key_appearance_matches_dungeon:
+    if world.key_appearance_match_dungeon:
         rom.write_byte(rom.sym('CUSTOM_KEY_MODELS'), 0x01)
 
     extended_objects_start = start_address = rom.free_space()
@@ -996,7 +995,7 @@ def patch_rom(world, rom):
     save_context.write_bits(0x0F21, 0x02) # "Ruto in JJ (M2) Meet Ruto"
 
 
-    if world.ruto_already_at_f1 and not world.dungeon_mq['Jabu Jabus Belly']:
+    if world.ruto_already_f1_jabu and not world.dungeon_mq['Jabu Jabus Belly']:
         save_context.write_bits(0x0F21, 0x80) # Ruto in JJ, Spawns on F1 instead of B1
 
     save_context.write_bits(0x0EE2, 0x01) # "Began Ganondorf Battle"
@@ -1073,7 +1072,7 @@ def patch_rom(world, rom):
     if world.complete_mask_quest:
         rom.write_byte(rom.sym('COMPLETE_MASK_QUEST'), 1)
 
-    if world.maintain_mask_equips:
+    if world.auto_equip_masks:
         rom.write_byte(rom.sym('CFG_MASK_AUTOEQUIP'), 0x01)
 
     if world.shuffle_child_trade == 'skip_child_zelda':
@@ -1160,7 +1159,7 @@ def patch_rom(world, rom):
         rom.write_int16(count_symbol, 0)
 
     symbol = rom.sym('KEYRING_BOSSKEY_CONDITION')
-    if world.key_rings_give_bosskeys:
+    if world.keyring_give_bk:
         rom.write_byte(symbol, 1)
 
     # Set up LACS conditions.
@@ -1451,10 +1450,10 @@ def patch_rom(world, rom):
         reward_text = None
     elif getattr(location.item, 'looks_like_item', None) is not None:
         jabu_item = location.item.looks_like_item
-        reward_text = create_fake_name(getHint(getItemGenericName(location.item.looks_like_item), True).text)
+        reward_text = create_fake_name(get_item_hint_text(location.item.looks_like_item, world))
     else:
         jabu_item = location.item
-        reward_text = getHint(getItemGenericName(location.item), True).text
+        reward_text = get_item_hint_text(location.item, world)
 
     # Update "Princess Ruto got the Spiritual Stone!" text before the midboss in Jabu
     if reward_text is None:
@@ -1858,7 +1857,7 @@ def patch_rom(world, rom):
         # Change first magic bean to cost 60 (is used as the price for the one time item when beans are shuffled)
         rom.write_byte(0xE209FD, 0x3C)
 
-    if world.shuffle_medigoron_carpet_salesman:
+    if world.shuffle_expensive_merchants:
         rom.write_byte(rom.sym('SHUFFLE_CARPET_SALESMAN'), 0x01)
         # Update carpet salesman messages to better fit the fact that he sells a randomized item
         update_message_by_id(messages, 0x6077, "\x06\x41Well Come!\x04I am selling stuff, strange and \x01rare, from all over the world to \x01everybody.\x01Today's special is...\x04A mysterious item! \x01Intriguing! \x01I won't tell you what it is until \x01I see the money....\x04How about \x05\x41200 Rupees\x05\x40?\x01\x01\x1B\x05\x42Buy\x01Don't buy\x05\x40\x02")
@@ -1869,6 +1868,14 @@ def patch_rom(world, rom):
         update_message_by_id(messages, 0x304C, "I have something cool right here.\x01How about it...\x07\x30\x4F\x02")
         update_message_by_id(messages, 0x304D, "How do you like it?\x02")
         update_message_by_id(messages, 0x304F, "How about buying this cool item for \x01200 Rupees?\x01\x1B\x05\x42Buy\x01Don't buy\x05\x40\x02")
+
+        rom.write_byte(rom.sym('SHUFFLE_GRANNYS_POTION_SHOP'), 0x01)
+        if 'unique_merchants' not in world.misc_hints:
+            update_message_by_id(messages, 0x500C, "Mysterious item! How about\x01\x05\x41100 Rupees\x05\x40?\x01\x1B\x05\x42Buy\x01Don't buy\x05\x40\x02")
+        else:
+            location = world.get_location("Kak Granny Buy Blue Potion")
+            item_text = get_item_hint_text(location.item, world)
+            update_message_by_id(messages, 0x500C, "How about \x05\x41100 Rupees\x05\x40 for\x01\x05\x41" + item_text + "\x05\x40?\x01\x1B\x05\x42Buy\x01Don't buy\x05\x40\x02")
 
     if hasattr(world, 'adult_trade_shuffle') and world.adult_trade_shuffle:
         rom.write_byte(rom.sym('CFG_ADULT_TRADE_SHUFFLE'), 0x01)

@@ -245,10 +245,10 @@ def rainbow_bridge_hint_kind(world: World) -> str:
         if world.options.bridge_tokens.value > 10:
             return 'sometimes'
         return 'never'
-    if world.options.bridge.value == 6:  # hearts; starting_hearts is always 3 in AP
-        if world.options.bridge_hearts.value > 4:
+    if world.options.bridge.value == 6:  # hearts
+        if world.options.bridge_hearts.value > world.options.starting_hearts.value + 1:
             return 'always'
-        if world.options.bridge_hearts.value > 3:
+        if world.options.bridge_hearts.value > world.options.starting_hearts.value:
             return 'sometimes'
         return 'never'
     raise NotImplementedError(f'Unimplemented bridge condition: {world.options.bridge.value}')

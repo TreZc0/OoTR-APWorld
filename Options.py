@@ -22,7 +22,10 @@ class TrackRandomRange(Range):
                 ret.randomized = True
             return ret
         if type(data) is not dict:
-            return super().from_any(data)
+            ret = super().from_any(data)
+            if isinstance(data, str) and data.strip().lower().startswith("random"):
+                ret.randomized = True
+            return ret
         if any(data.values()):
             val = random.choices(list(data.keys()), weights=list(map(int, data.values())))[0]
             ret = super().from_any(val)
@@ -47,13 +50,6 @@ class Logic(Choice):
     """Set the logic used for the generator.
     Glitchless: Normal gameplay. Can enable more difficult logical paths using the Logic Tricks option.
     Advanced: Many powerful glitches expected, such as bomb hovering and clipping.
-    Advanced is incompatible with the following settings:
-    - All forms of entrance randomizer
-    - MQ dungeons
-    - Pot shuffle
-    - Freestanding item shuffle
-    - Crate shuffle
-    - Beehive shuffle
     No Logic: No logic is used when placing items. Not recommended for most players."""
     display_name = "Logic Rules"
     option_glitchless = 0
@@ -266,22 +262,6 @@ class SpawnPositions(Choice):
     option_both = 3
     alias_true = 3
 
-
-# class MixEntrancePools(Choice):
-#     """Shuffles entrances into a mixed pool instead of separate ones. "indoor" keeps overworld entrances separate; "all"
-#      mixes them in."""
-#     display_name = "Mix Entrance Pools"
-#     option_off = 0
-#     option_indoor = 1
-#     option_all = 2
-
-
-# class DecoupleEntrances(Toggle):
-#     """Decouple entrances when shuffling them. Also adds the one-way entrance from Gerudo Valley to Lake Hylia if
-#     overworld is shuffled."""
-#     display_name = "Decouple Entrances"
-
-
 class TriforceHunt(Toggle):
     """Gather pieces of the Triforce scattered around the world to complete the game."""
     display_name = "Triforce Hunt"
@@ -380,34 +360,35 @@ class MQDungeonCount(TrackRandomRange):
     default = 0
 
 
-# class EmptyDungeons(Choice):
-#     """Pre-completed dungeons are barren and rewards are given for free."""
-#     display_name = "Pre-completed Dungeons Mode"
-#     option_none = 0
-#     option_specific = 1
-#     option_count = 2
+class EmptyDungeons(Choice):
+    """Choose dungeons that are pre-completed. Pre-completed dungeons are filled with non-progression items."""
+    display_name = "Pre-completed Dungeons Mode"
+    option_none = 0
+    option_specific = 1
+    option_count = 2
 
 
-# class EmptyDungeonList(OptionSet):
-#     """Chosen dungeons to be pre-completed."""
-#     display_name = "Pre-completed Dungeon List"
-#     valid_keys = {
-#         "Deku Tree",
-#         "Dodongo's Cavern",
-#         "Jabu Jabu's Belly",
-#         "Forest Temple",
-#         "Fire Temple",
-#         "Water Temple",
-#         "Shadow Temple",
-#         "Spirit Temple",
-#     }
+class EmptyDungeonList(OptionSet):
+    """With pre-completed dungeons as Specific: chosen dungeons to be pre-completed."""
+    display_name = "Pre-completed Dungeon List"
+    valid_keys = {
+        "Deku Tree",
+        "Dodongo's Cavern",
+        "Jabu Jabu's Belly",
+        "Forest Temple",
+        "Fire Temple",
+        "Water Temple",
+        "Shadow Temple",
+        "Spirit Temple",
+    }
 
 
-# class EmptyDungeonCount(Range):
-#     display_name = "Pre-completed Dungeon Count"
-#     range_start = 1
-#     range_end = 8
-#     default = 2
+class EmptyDungeonCount(TrackRandomRange):
+    """With pre-completed dungeons as Count: number of randomly-selected dungeons to be pre-completed."""
+    display_name = "Pre-completed Dungeon Count"
+    range_start = 1
+    range_end = 8
+    default = 2
 
 
 world_options: typing.Dict[str, type(Option)] = {
@@ -424,8 +405,6 @@ world_options: typing.Dict[str, type(Option)] = {
     "spawn_positions": SpawnPositions,
     "shuffle_bosses": BossEntrances,
     "shuffle_ganon_tower": ShuffleGanonTower,
-    # "mix_entrance_pools": MixEntrancePools,
-    # "decouple_entrances": DecoupleEntrances,
     "triforce_hunt": TriforceHunt, 
     "triforce_goal": TriforceGoal,
     "extra_triforce_percentage": ExtraTriforces,
@@ -438,9 +417,9 @@ world_options: typing.Dict[str, type(Option)] = {
     "mq_dungeons_list": MQDungeonList,
     "mq_dungeons_count": MQDungeonCount,
 
-    # "empty_dungeons_mode": EmptyDungeons,
-    # "empty_dungeons_list": EmptyDungeonList,
-    # "empty_dungeon_count": EmptyDungeonCount,
+    "empty_dungeons_mode": EmptyDungeons,
+    "empty_dungeons_list": EmptyDungeonList,
+    "empty_dungeons_count": EmptyDungeonCount,
 }
 
 
@@ -568,7 +547,7 @@ class SpecialDealPriceDistribution(Choice):
     default = 1
 
 
-class SpecialDealPriceMin(Range):
+class SpecialDealPriceMin(TrackRandomRange):
     """Minimum rupee price for shuffled shop special deal slots."""
     display_name = "Minimum Special Deal Price"
     range_start = 0
@@ -576,7 +555,7 @@ class SpecialDealPriceMin(Range):
     default = 0
 
 
-class SpecialDealPriceMax(Range):
+class SpecialDealPriceMax(TrackRandomRange):
     """Maximum rupee price for shuffled shop special deal slots."""
     display_name = "Maximum Special Deal Price"
     range_start = 0
@@ -650,9 +629,9 @@ class ShuffleBeans(Toggle):
     display_name = "Shuffle Magic Beans"
 
 
-class ShuffleMedigoronCarpet(Toggle):
-    """Shuffle the items sold by Medigoron and the Haunted Wasteland Carpet Salesman."""
-    display_name = "Shuffle Medigoron & Carpet Salesman"
+class ShuffleExpensiveMerchants(Toggle):
+    """Shuffle the items sold by Medigoron, Granny's Potion Shop, and the Haunted Wasteland Carpet Salesman."""
+    display_name = "Shuffle Expensive Merchants"
 
 
 class ShuffleFreestanding(Choice):
@@ -679,6 +658,11 @@ class ShufflePots(Choice):
     option_all = 3
 
 
+class ShuffleEmptyPots(Toggle):
+    """Includes empty pots when pot shuffle is enabled."""
+    display_name = "Include Empty Pots"
+
+
 class ShuffleCrates(Choice):
     """Shuffles large and small crates containing an item.
     Dungeons: Only crates in dungeons are shuffled.
@@ -689,6 +673,11 @@ class ShuffleCrates(Choice):
     option_dungeons = 1
     option_overworld = 2
     option_all = 3
+
+
+class ShuffleEmptyCrates(Toggle):
+    """Includes empty crates when crate shuffle is enabled."""
+    display_name = "Include Empty Crates"
 
 
 class ShuffleBeehives(Toggle):
@@ -792,7 +781,9 @@ shuffle_options: typing.Dict[str, type(Option)] = {
     "shuffle_child_trade": ShuffleChildTrade,
     "shuffle_freestanding_items": ShuffleFreestanding,
     "shuffle_pots": ShufflePots,
+    "shuffle_empty_pots": ShuffleEmptyPots,
     "shuffle_crates": ShuffleCrates,
+    "shuffle_empty_crates": ShuffleEmptyCrates,
     "shuffle_cows": ShuffleCows,
     "shuffle_beehives": ShuffleBeehives,
     "shuffle_wonderitems": ShuffleWonderitems,
@@ -800,7 +791,7 @@ shuffle_options: typing.Dict[str, type(Option)] = {
     "shuffle_ocarinas": ShuffleOcarinas,
     "shuffle_gerudo_card": ShuffleCard,
     "shuffle_beans": ShuffleBeans,
-    "shuffle_medigoron_carpet_salesman": ShuffleMedigoronCarpet,
+    "shuffle_expensive_merchants": ShuffleExpensiveMerchants,
     "shuffle_frog_song_rupees": ShuffleFrogRupees,
     "shuffle_100_skulltula_rupee": Shuffle100SkulltulaRupee,
     "shuffle_silver_rupees": ShuffleSilverRupees,
@@ -1042,17 +1033,17 @@ class GanonBKHearts(Range):
 
 class KeyRings(Choice):
     """A key ring grants all dungeon small keys at once, rather than individually.
-    Choose: Use the option "key_rings_list" to choose which dungeons have key rings.
+    Choice: Use the option "key_rings_list" to choose which dungeons have key rings.
     All: All dungeons have key rings instead of small keys."""
     display_name = "Key Rings Mode"
     option_off = 0
-    option_choose = 1
+    option_choice = 1
     option_all = 2
     option_random_dungeons = 3
 
 
 class KeyRingList(OptionSet):
-    """With key rings as Choose: select areas with key rings rather than individual small keys."""
+    """With key rings as Choice: select areas with key rings rather than individual small keys."""
     display_name = "Key Ring Areas"
     valid_keys = {
         "Thieves' Hideout",
@@ -1084,7 +1075,7 @@ dungeon_items_options: typing.Dict[str, type(Option)] = {
     "ganon_bosskey_hearts": GanonBKHearts,
     "key_rings": KeyRings,
     "key_rings_list": KeyRingList,
-    "key_rings_give_bosskeys": KeyRingsGiveBossKeys
+    "keyring_give_bk": KeyRingsGiveBossKeys
 }
 
 
@@ -1329,11 +1320,8 @@ class HintDistribution(Choice):
     display_name = "Hint Distribution"
     option_balanced = 0
     option_ddr = 1
-    # option_league = 2
-    # option_mw3 = 3
     option_scrubs = 4
     option_strong = 5
-    # option_tournament = 6
     option_useless = 7
     option_very_strong = 8
     option_async = 9
@@ -1413,14 +1401,22 @@ class RupeeStart(Toggle):
     display_name = "Start with Rupees"
 
 
+class StartingHearts(Range):
+    """Start the game with the selected number of hearts."""
+    display_name = "Starting Hearts"
+    range_start = 3
+    range_end = 20
+    default = 3
+
+
 misc_options: typing.Dict[str, type(Option)] = {
     "correct_chest_appearances": CorrectChestAppearance,
     "minor_items_as_major_chest": MinorInMajor,
     "invisible_chests": InvisibleChests,
     "correct_potcrate_appearances": CorrectPotCrateAppearance,
-    "key_appearance_matches_dungeon": KeyAppearanceMatchesDungeon,
-    "ruto_already_at_f1": RutoAlreadyAtF1,
-    "maintain_mask_equips": MaintainMaskEquips,
+    "key_appearance_match_dungeon": KeyAppearanceMatchesDungeon,
+    "ruto_already_f1_jabu": RutoAlreadyAtF1,
+    "auto_equip_masks": MaintainMaskEquips,
     "hints": Hints,
     "misc_hints": MiscHints,
     "hint_dist": HintDistribution,
@@ -1433,6 +1429,7 @@ misc_options: typing.Dict[str, type(Option)] = {
     "fix_broken_drops": FixBrokenDrops,
     "start_with_consumables": ConsumableStart,
     "start_with_rupees": RupeeStart,
+    "starting_hearts": StartingHearts,
 }
 
 class ItemPoolValue(Choice): 
@@ -1757,7 +1754,7 @@ class OoTOptions(PerGameCommonOptions):
     death_link: DeathLink
     logic_rules: Logic
     logic_no_night_tokens_without_suns_song: NightTokens
-    logic_tricks: LogicTricks
+    allowed_tricks: LogicTricks
     advanced_allowed_tricks: AdvancedAllowedTricks
     open_forest: Forest
     open_kakariko: Gate
@@ -1776,8 +1773,6 @@ class OoTOptions(PerGameCommonOptions):
     spawn_positions: SpawnPositions
     shuffle_bosses: BossEntrances
     shuffle_ganon_tower: ShuffleGanonTower
-    # mix_entrance_pools: MixEntrancePools
-    # decouple_entrances: DecoupleEntrances
     triforce_hunt: TriforceHunt
     triforce_goal: TriforceGoal
     extra_triforce_percentage: ExtraTriforces
@@ -1787,9 +1782,9 @@ class OoTOptions(PerGameCommonOptions):
     mq_dungeons_mode: MQDungeons
     mq_dungeons_list: MQDungeonList
     mq_dungeons_count: MQDungeonCount
-    # empty_dungeons_mode: EmptyDungeons
-    # empty_dungeons_list: EmptyDungeonList
-    # empty_dungeon_count: EmptyDungeonCount
+    empty_dungeons_mode: EmptyDungeons
+    empty_dungeons_list: EmptyDungeonList
+    empty_dungeons_count: EmptyDungeonCount
     bridge_stones: BridgeStones
     bridge_medallions: BridgeMedallions
     bridge_rewards: BridgeRewards
@@ -1822,7 +1817,9 @@ class OoTOptions(PerGameCommonOptions):
     shuffle_child_trade: ShuffleChildTrade
     shuffle_freestanding_items: ShuffleFreestanding
     shuffle_pots: ShufflePots
+    shuffle_empty_pots: ShuffleEmptyPots
     shuffle_crates: ShuffleCrates
+    shuffle_empty_crates: ShuffleEmptyCrates
     shuffle_cows: ShuffleCows
     shuffle_beehives: ShuffleBeehives
     shuffle_wonderitems: ShuffleWonderitems
@@ -1830,7 +1827,7 @@ class OoTOptions(PerGameCommonOptions):
     shuffle_ocarinas: ShuffleOcarinas
     shuffle_gerudo_card: ShuffleCard
     shuffle_beans: ShuffleBeans
-    shuffle_medigoron_carpet_salesman: ShuffleMedigoronCarpet
+    shuffle_expensive_merchants: ShuffleExpensiveMerchants
     shuffle_frog_song_rupees: ShuffleFrogRupees
     shuffle_100_skulltula_rupee: Shuffle100SkulltulaRupee
     shuffle_silver_rupees: ShuffleSilverRupees
@@ -1841,7 +1838,7 @@ class OoTOptions(PerGameCommonOptions):
     shuffle_hideout_entrances: ShuffleHideoutEntrances
     shuffle_gerudo_fortress_heart_piece: ShuffleGerudoFortressHeartPiece
     shuffle_gerudo_valley_river_exit: ShuffleGerudoValleyRiverExit
-    key_rings_give_bosskeys: KeyRingsGiveBossKeys
+    keyring_give_bk: KeyRingsGiveBossKeys
     no_escape_sequence: SkipEscape
     no_guard_stealth: SkipStealth
     no_epona_race: SkipEponaRace
@@ -1862,9 +1859,9 @@ class OoTOptions(PerGameCommonOptions):
     minor_items_as_major_chest: MinorInMajor
     invisible_chests: InvisibleChests
     correct_potcrate_appearances: CorrectPotCrateAppearance
-    key_appearance_matches_dungeon: KeyAppearanceMatchesDungeon
-    ruto_already_at_f1: RutoAlreadyAtF1
-    maintain_mask_equips: MaintainMaskEquips
+    key_appearance_match_dungeon: KeyAppearanceMatchesDungeon
+    ruto_already_f1_jabu: RutoAlreadyAtF1
+    auto_equip_masks: MaintainMaskEquips
     hints: Hints
     misc_hints: MiscHints
     hint_dist: HintDistribution
@@ -1877,6 +1874,7 @@ class OoTOptions(PerGameCommonOptions):
     fix_broken_drops: FixBrokenDrops
     start_with_consumables: ConsumableStart
     start_with_rupees: RupeeStart
+    starting_hearts: StartingHearts
     item_pool_value: ItemPoolValue
     junk_ice_traps: IceTraps
     custom_ice_trap_percent: CustomIceTrapPercent
