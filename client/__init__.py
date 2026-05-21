@@ -50,7 +50,7 @@ deathlink_sent_this_death: we interacted with the multiworld on this death, wait
 
 oot_loc_name_to_id = network_data_package["games"]["Ocarina of Time"]["location_name_to_id"]
 
-script_version: int = 7
+script_version: int = 8
 
 def get_item_value(ap_id):
     return ap_id - 66000
@@ -88,6 +88,7 @@ class OoTContext(CommonContext):
         self.collectible_table = {}
         self.collectible_override_flags_address = 0
         self.collectible_offsets = {}
+        self.shop_flag_offsets = {}
         self.deathlink_enabled = False
         self.deathlink_pending = False
         self.deathlink_sent_this_death = False
@@ -128,6 +129,7 @@ class OoTContext(CommonContext):
             if slot_data:
                 self.collectible_override_flags_address = slot_data.get('collectible_override_flags', 0)
                 self.collectible_offsets = slot_data.get('collectible_flag_offsets', {})
+                self.shop_flag_offsets = slot_data.get('shop_flag_offsets', {})
         elif cmd == 'PrintJSON':
             if args.get('type') == 'ItemSend':
                 network_item = args.get('item')
@@ -162,6 +164,7 @@ def get_payload(ctx: OoTContext):
             "triggerDeath": trigger_death,
             "collectibleOverrides": ctx.collectible_override_flags_address,
             "collectibleOffsets": ctx.collectible_offsets,
+            "shopFlagOffsets": ctx.shop_flag_offsets,
             "pendingDisplayItems": pending_display_items,
         })
     return payload

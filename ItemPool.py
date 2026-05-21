@@ -221,6 +221,20 @@ trade_items = (
     "Claim Check",
 )
 
+child_trade_items = (
+    "Weird Egg",
+    "Chicken",
+    "Zeldas Letter",
+    "Keaton Mask",
+    "Skull Mask",
+    "Spooky Mask",
+    "Bunny Hood",
+    "Goron Mask",
+    "Zora Mask",
+    "Gerudo Mask",
+    "Mask of Truth",
+)
+
 def get_spec(tup, key, default):
     special = tup[3]
     if special is None:
@@ -276,6 +290,7 @@ item_groups = {
     'Junk': remove_junk_items,
     'JunkSong': ('Prelude of Light', 'Serenade of Water'),
     'AdultTrade': trade_items,
+    'ChildTrade': child_trade_items,
     'Bottle': normal_bottles,
     'Spell': ('Dins Fire', 'Farores Wind', 'Nayrus Love'),
     'Shield': ('Deku Shield', 'Hylian Shield'),
@@ -392,6 +407,15 @@ def get_pool_core(world):
 
     if world.item_pool_value == 'plentiful':
         pending_junk_pool.extend(plentiful_items)
+        if world.shuffle_child_trade:
+            pending_junk_pool.extend(world.shuffle_child_trade)
+            # Weird Egg is always chosen if both Egg and Chicken are shuffled.
+            if 'Weird Egg' in world.shuffle_child_trade and 'Chicken' in world.shuffle_child_trade:
+                pending_junk_pool.remove('Chicken')
+            if world.skip_child_zelda:
+                for item in ('Weird Egg', 'Chicken', 'Zeldas Letter'):
+                    if item in pending_junk_pool:
+                        pending_junk_pool.remove(item)
         if world.zora_fountain != 'open':
             ruto_bottles += 1
         if world.shuffle_kokiri_sword:
@@ -491,12 +515,11 @@ def get_pool_core(world):
             continue
 
         # Always Placed Items
-        if (location.vanilla_item in ['Zeldas Letter', 'Triforce', 'Scarecrow Song',
+        if (location.vanilla_item in ['Triforce', 'Scarecrow Song',
                                       'Deliver Letter', 'Time Travel', 'Bombchu Drop']
                 or location.type == 'Drop'):
             shuffle_item = False
-            if location.vanilla_item != 'Zeldas Letter':
-                location.show_in_spoiler = False
+            location.show_in_spoiler = False
 
         # Gold Skulltula Tokens
         elif location.vanilla_item == 'Gold Skulltula Token':
@@ -532,16 +555,26 @@ def get_pool_core(world):
         elif location.vanilla_item == 'Kokiri Sword':
             shuffle_item = world.shuffle_kokiri_sword
 
-        # Weird Egg
-        elif location.vanilla_item == 'Weird Egg':
-            if world.shuffle_child_trade == 'skip_child_zelda':
+        # Child Trade Quest Items
+        elif location.vanilla_item in child_trade_items:
+            if location.vanilla_item == 'Weird Egg' and world.skip_child_zelda:
                 item = IGNORE_LOCATION
                 shuffle_item = False
                 location.show_in_spoiler = False
                 world.multiworld.push_precollected(world.create_item('Weird Egg'))
                 world.remove_from_start_inventory.append('Weird Egg')
+            elif not world.shuffle_child_trade:
+                shuffle_item = False
+            elif location.vanilla_item in world.shuffle_child_trade:
+                shuffle_item = True
             else:
-                shuffle_item = world.shuffle_child_trade != 'vanilla'
+                # Upgrade Weird Egg to Chicken if the Chicken is shuffled but not the Egg.
+                # If both are selected to be shuffled, only the Egg gets shuffled.
+                if location.vanilla_item == 'Weird Egg' and 'Chicken' in world.shuffle_child_trade:
+                    item = 'Chicken'
+                    shuffle_item = True
+                else:
+                    shuffle_item = False
 
         # Ocarinas
         elif location.vanilla_item == 'Ocarina':
@@ -806,10 +839,9 @@ def get_pool_core(world):
                 # dungeon, overworld, any_dungeon, regional, anywhere
                 shuffle_item = True
 
-        # Mask Shop items - always vanilla (masks are not shuffled)
         elif location.type == 'MaskShop':
-            shuffle_item = False
-            location.show_in_spoiler = False
+            shuffle_item = location.vanilla_item in world.shuffle_child_trade
+            location.show_in_spoiler = shuffle_item
 
         elif location.type == 'TCGSmallKey' or (location.scene == 0x10 and location.vanilla_item != 'Piece of Heart (Treasure Chest Game)'):
             if world.shuffle_tcgkeys == 'vanilla':

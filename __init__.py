@@ -332,6 +332,7 @@ class OOTWorld(World):
         self._regions_cache = {}
 
         self.shop_prices = {}
+        self.shop_location_flags = {}
         self.remove_from_start_inventory = []  # some items will be precollected but not in the inventory
         self.randomized_starting_items = {}
         self.starting_items = Counter()
@@ -342,8 +343,14 @@ class OOTWorld(World):
         self.collectible_flag_addresses = {}
         self.song_notes = {name: notes for name, (_, _, notes) in SONG_TABLE.items()}
 
-        # Set skip_child_zelda boolean for logic
-        self.skip_child_zelda = (self.shuffle_child_trade == 'skip_child_zelda')
+        starts_with_zeldas_letter = (
+            self.options.start_inventory.value.get('Zeldas Letter', 0) > 0
+            or any(item.name == 'Zeldas Letter' for item in self.multiworld.precollected_items[self.player])
+        )
+
+        # Set skip_child_zelda boolean for logic. Upstream models this as
+        # starting with Zelda's Letter while Zelda's Letter itself is not shuffled.
+        self.skip_child_zelda = starts_with_zeldas_letter and 'Zeldas Letter' not in self.shuffle_child_trade
 
         # Fix spawn positions option
         new_sp = []
@@ -599,7 +606,7 @@ class OOTWorld(World):
         self.added_hint_types = {}
         self.item_added_hint_types = {}
         self.hint_exclusions = set()
-        if self.shuffle_child_trade == 'skip_child_zelda':
+        if self.skip_child_zelda:
             self.hint_exclusions.add('Song from Impa')
         self.hint_type_overrides = {}
         self.item_hint_type_overrides = {}
@@ -789,6 +796,48 @@ class OOTWorld(World):
                 if location.type == 'Shop':
                     if location.name[-1:] in shop_item_indexes[:shop_item_count]:
                         self.shop_prices[location.name] = self.new_shop_price(location)
+
+
+    def calculate_shop_location_flags(self):
+        current_shop_id = 0x32
+        shop_location_flags = {}
+        shop_regions = [
+            ('KF Kokiri Shop', 'Shop'),
+            ('Kak Bazaar', 'Shop'),
+            ('Market Bazaar', 'Shop'),
+            ('GC Shop', 'Shop'),
+            ('ZD Shop', 'Shop'),
+            ('Kak Potion Shop Front', 'Shop'),
+            ('Market Potion Shop', 'Shop'),
+            ('Market Bombchu Shop', 'Shop'),
+            ('Market Mask Shop Storefront', 'MaskShop'),
+        ]
+
+        for region_name, location_type in shop_regions:
+            for location in self.get_region(region_name).locations:
+                if location.type != location_type:
+                    continue
+
+                selected_mask_shop_item = (
+                    location.type == 'MaskShop'
+                    and location.vanilla_item in self.shuffle_child_trade
+                )
+                vanilla_shop_item = isinstance(location.item, OOTItem) and location.item.type == 'Shop'
+                custom_shop_item = not (
+                    vanilla_shop_item
+                    or (location.type == 'MaskShop' and not selected_mask_shop_item)
+                )
+
+                if custom_shop_item:
+                    shop_location_flags[location.name] = current_shop_id - 0x32
+
+                if location.type == 'MaskShop':
+                    if custom_shop_item:
+                        current_shop_id += 1
+                elif any(c in location.name for c in {'5', '6', '7', '8'}):
+                    current_shop_id += 1
+
+        return shop_location_flags
 
 
     def new_shop_price(self, location):
@@ -1268,7 +1317,7 @@ class OOTWorld(World):
         for loc in self.get_locations():
             if loc.address is not None and (
                     not loc.show_in_spoiler or oot_is_item_of_type(loc.item, 'Shop')
-                    or (self.shuffle_child_trade == 'skip_child_zelda' and loc.name in ['HC Zeldas Letter', 'Song from Impa'])):
+                    or (self.skip_child_zelda and loc.name in ['HC Zeldas Letter', 'Song from Impa'])):
                 loc.address = None
 
         self.remove_excess_junk_from_itempool()
@@ -1344,9 +1393,9 @@ class OOTWorld(World):
                 state.collect(self.create_item("Scarecrow Song"), prevent_sweep=True)
             if not self.shuffle_ocarinas:
                 state.collect(self.create_item("Ocarina"), prevent_sweep=True)
-            if self.shuffle_child_trade == 'vanilla':
+            if 'Weird Egg' not in self.shuffle_child_trade and 'Chicken' not in self.shuffle_child_trade:
                 state.collect(self.create_item("Weird Egg"), prevent_sweep=True)
-            if self.shuffle_child_trade in {'vanilla', 'shuffle'}:
+            if 'Zeldas Letter' not in self.shuffle_child_trade:
                 state.collect(self.create_item("Zeldas Letter"), prevent_sweep=True)
             if assume_song_of_time and self.open_door_of_time not in ('open', 'stones'):
                 state.collect(self.create_item("Song of Time"), prevent_sweep=True)
@@ -1713,10 +1762,13 @@ class OOTWorld(World):
 
     def fill_slot_data(self):
         self.collectible_flags_available.wait()
+        if not self.shop_location_flags:
+            self.shop_location_flags = self.calculate_shop_location_flags()
 
         slot_data = {
             'collectible_override_flags': self.collectible_override_flags,
-            'collectible_flag_offsets': self.collectible_flag_offsets
+            'collectible_flag_offsets': self.collectible_flag_offsets,
+            'shop_flag_offsets': self.shop_location_flags,
         }
         slot_data.update(self.options.as_dict(
             "open_forest", "open_kakariko", "open_door_of_time", "zora_fountain", "gerudo_fortress",
@@ -1765,7 +1817,7 @@ class OOTWorld(World):
             multidata["precollected_items"][self.player].remove(item_id)
 
         # If skip child zelda, push item onto autotracker
-        if self.shuffle_child_trade == 'skip_child_zelda':
+        if self.skip_child_zelda:
             impa_item_id = self.item_name_to_id.get(self.get_location('Song from Impa').item.name, None)
             zelda_item_id = self.item_name_to_id.get(self.get_location('HC Zeldas Letter').item.name, None)
             if impa_item_id:
@@ -1954,9 +2006,9 @@ class OOTWorld(World):
             all_state.collect(self.create_item("Scarecrow Song"), prevent_sweep=True)
         if not self.shuffle_ocarinas:
             all_state.collect(self.create_item("Ocarina"), prevent_sweep=True)
-        if self.shuffle_child_trade == 'vanilla':
+        if 'Weird Egg' not in self.shuffle_child_trade and 'Chicken' not in self.shuffle_child_trade:
             all_state.collect(self.create_item("Weird Egg"), prevent_sweep=True)
-        if self.shuffle_child_trade in {'vanilla', 'shuffle'}:
+        if 'Zeldas Letter' not in self.shuffle_child_trade:
             all_state.collect(self.create_item("Zeldas Letter"), prevent_sweep=True)
         if self.open_door_of_time not in ('open', 'stones'):
             all_state.collect(self.create_item("Song of Time"), prevent_sweep=True)

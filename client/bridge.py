@@ -15,7 +15,7 @@ except ImportError:
 from .emu_loader import EmuLoaderClient
 from ..Utils import OOT_PLAYER_NAME_LENGTH, encode_oot_player_name
 
-SCRIPT_VERSION = 7
+SCRIPT_VERSION = 8
 CONNECT_PORT   = 28921
 OUTGOING_KEY_POLL_FRAMES = 6
 PROTOCOL_EXCHANGE_FRAMES = 10
@@ -85,6 +85,7 @@ class OoTBridgeState:
         "temp_context_history", "mq_table_address", "collectible_overrides",
         "collectible_offsets", "item_queue", "first_connect",
         "player_names_initialized", "game_complete", "num_big_poes_required",
+        "shop_flag_offsets",
     )
 
     def __init__(self) -> None:
@@ -97,6 +98,7 @@ class OoTBridgeState:
         self.player_names_initialized: bool            = False
         self.game_complete:           bool             = False
         self.num_big_poes_required:   int              = 10
+        self.shop_flag_offsets:       dict             = {}
 
     def reset_connection(self) -> None:
         self.temp_context_history = set()
@@ -274,6 +276,17 @@ def _skulltula(emu: EmuLoaderClient, scene: int, bit: int) -> bool:
 
 def _shop(emu: EmuLoaderClient, shop_off: int, item_off: int) -> bool:
     return bool(emu.read_u32(SHOP_CONTEXT_ADDR) & (1 << (shop_off * 4 + item_off)))
+
+
+def _shop_flag(emu: EmuLoaderClient, flag: int) -> bool:
+    return bool(emu.read_u8(SHOP_CONTEXT_ADDR + (flag >> 3)) & (1 << (flag & 7)))
+
+
+def _shop_location(emu: EmuLoaderClient, st: OoTBridgeState, location_name: str, scene: int, get_item_id: int) -> bool:
+    flag = st.shop_flag_offsets.get(location_name)
+    if flag is not None:
+        return _shop_flag(emu, int(flag)) or _base_item(emu, st, scene, get_item_id)
+    return False
 
 
 def _event(emu: EmuLoaderClient, major: int, bit: int) -> bool:
@@ -531,6 +544,14 @@ def _market(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
         "Market Bombchu Shop Item 6":          _shop(emu, 0x1, 0x1),
         "Market Bombchu Shop Item 7":          _shop(emu, 0x1, 0x2),
         "Market Bombchu Shop Item 8":          _shop(emu, 0x1, 0x3),
+        "Market Mask Shop Item 1":             _shop_location(emu, st, "Market Mask Shop Item 1", 0x33, 0x53),
+        "Market Mask Shop Item 2":             _shop_location(emu, st, "Market Mask Shop Item 2", 0x33, 0x52),
+        "Market Mask Shop Item 3":             _shop_location(emu, st, "Market Mask Shop Item 3", 0x33, 0x1C),
+        "Market Mask Shop Item 4":             _shop_location(emu, st, "Market Mask Shop Item 4", 0x33, 0x51),
+        "Market Mask Shop Item 5":             _shop_location(emu, st, "Market Mask Shop Item 5", 0x33, 0x17),
+        "Market Mask Shop Item 6":             _shop_location(emu, st, "Market Mask Shop Item 6", 0x33, 0x1A),
+        "Market Mask Shop Item 7":             _shop_location(emu, st, "Market Mask Shop Item 7", 0x33, 0x1B),
+        "Market Mask Shop Item 8":             _shop_location(emu, st, "Market Mask Shop Item 8", 0x33, 0x18),
     }
 
 
@@ -1341,6 +1362,10 @@ def _process_block(emu: EmuLoaderClient, st: OoTBridgeState, block: dict) -> Non
     new_offsets = block.get("collectibleOffsets")
     if new_offsets != st.collectible_offsets:
         st.collectible_offsets = new_offsets
+
+    new_shop_offsets = block.get("shopFlagOffsets", {})
+    if new_shop_offsets != st.shop_flag_offsets:
+        st.shop_flag_offsets = new_shop_offsets
 
 
 async def _protocol_cycle(

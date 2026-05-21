@@ -210,7 +210,7 @@ def tokens_required_by_settings(world: World) -> int:
 # Hints required under certain settings
 conditional_always: dict[str, Callable[[World], bool]] = {
     'Market 10 Big Poes':           lambda world: world.options.big_poe_count.value > 3 and 'big_poes' not in world.options.misc_hints.value,
-    'Deku Theater Mask of Truth':   lambda world: not world.options.complete_mask_quest.value and world.options.shuffle_child_trade.value != 2 and 'mask_of_truth' not in world.options.misc_hints.value,  # 2 = skip_child_zelda
+    'Deku Theater Mask of Truth':   lambda world: not world.options.complete_mask_quest.value and 'Mask of Truth' not in world.options.shuffle_child_trade.value and 'mask_of_truth' not in world.options.misc_hints.value,
     'Song from Ocarina of Time':    lambda world: stones_required_by_settings(world) < 2,
     'HF Ocarina of Time Item':      lambda world: stones_required_by_settings(world) < 2,
     'Sheik in Kakariko':            lambda world: medallions_required_by_settings(world) < 5,

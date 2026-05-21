@@ -223,7 +223,7 @@ def set_rules(ootworld):
         location = multiworld.get_location('Sheik in Ice Cavern', player)
         add_item_rule(location, lambda item: oot_is_item_of_type(item, 'Song'))
 
-    if ootworld.shuffle_child_trade == 'skip_child_zelda':
+    if ootworld.skip_child_zelda:
         # Song from Impa must be local
         location = multiworld.get_location('Song from Impa', player)
         add_item_rule(location, lambda item: item.player == player)

@@ -1075,7 +1075,7 @@ def patch_rom(world, rom):
     if world.auto_equip_masks:
         rom.write_byte(rom.sym('CFG_MASK_AUTOEQUIP'), 0x01)
 
-    if world.shuffle_child_trade == 'skip_child_zelda':
+    if world.skip_child_zelda:
         save_context.give_item(world, 'Zeldas Letter')
         # AP forces this item to be local so it can always be given to the player. Usually it's a song so it's no problem.
         item = world.get_location('Song from Impa').item
@@ -1771,6 +1771,14 @@ def patch_rom(world, rom):
     rom.write_int32(0x2DD802C, 0x03006A40)
     rom.write_int16s(0x2DDEA40, list(shop_objs))
 
+    # mask shop
+    shop_objs = place_shop_items(rom, world, shop_items, messages,
+        list(filter(lambda loc: loc.type == 'MaskShop', world.get_region('Market Mask Shop Storefront').locations)))
+    shop_objs |= {0x013E, 0x00B2, 0x0111, 0x00C5, 0x0165} # Shop objects
+    rom.write_byte(0x340A029, len(shop_objs))
+    rom.write_int32(0x340A02C, 0x0300D400)
+    rom.write_int16s(0x3417400, list(shop_objs))
+
     # Scrub text stuff.
     def update_scrub_text(message, text_replacement, default_price, price, item_name=None):
         scrub_strip_text = ["some ", "1 piece   ", "5 pieces   ", "30 pieces   "]
@@ -1880,7 +1888,7 @@ def patch_rom(world, rom):
     if hasattr(world, 'adult_trade_shuffle') and world.adult_trade_shuffle:
         rom.write_byte(rom.sym('CFG_ADULT_TRADE_SHUFFLE'), 0x01)
         move_fado_in_lost_woods(rom)
-    if hasattr(world, 'shuffle_child_trade') and world.shuffle_child_trade != 'vanilla':
+    if hasattr(world, 'shuffle_child_trade') and (world.shuffle_child_trade or world.logic_rules == 'advanced'):
         rom.write_byte(rom.sym('CFG_CHILD_TRADE_SHUFFLE'), 0x01)
 
     if world.shuffle_silver_rupees != 'vanilla':
@@ -2498,6 +2506,8 @@ def get_override_entry(ootworld, location):
         type = 3
     elif location.type == 'Shop' and not (isinstance(location.item, OOTItem) and location.item.type == 'Shop'):
         type = 0
+    elif location.type == 'MaskShop' and location.vanilla_item in location.world.shuffle_child_trade:
+        type = 0
     elif location.type == 'GrottoScrub' and not (isinstance(location.item, OOTItem) and location.item.type == 'Shop'):
         type = 4
     elif location.type in ['Song', 'Cutscene', 'Boss']:
@@ -2749,10 +2759,16 @@ def create_fake_name(item_name):
 def place_shop_items(rom, world, shop_items, messages, locations, init_shop_id=False):
     if init_shop_id:
         world.current_shop_id = 0x32
+        world.shop_location_flags = {}
 
     shop_objs = { 0x0148 } # "Sold Out" object
     for location in locations:
-        if isinstance(location.item, OOTItem) and location.item.type == 'Shop':
+        selected_mask_shop_item = location.type == 'MaskShop' and location.vanilla_item in world.shuffle_child_trade
+        custom_shop_item = True
+        if (isinstance(location.item, OOTItem) and location.item.type == 'Shop') or (
+            location.type == 'MaskShop' and not selected_mask_shop_item
+        ):
+            custom_shop_item = False
             shop_objs.add(location.item.special['object'])
             rom.write_int16(location.address1, location.item.index)
         else:
@@ -2785,13 +2801,20 @@ def place_shop_items(rom, world, shop_items, messages, locations, init_shop_id=F
 
             shop_item.object = obj_id
             shop_item.model = model
-            shop_item.price = location.price
+            shop_item.price = 0 if location.type == 'MaskShop' else location.price
             shop_item.pieces = 1
             shop_item.get_item_id = location.default
             shop_item.func1 = 0x808648CC
             shop_item.func2 = 0x808636B8
             shop_item.func3 = 0x00000000
             shop_item.func4 = 0x80863FB4
+
+            if (not world.complete_mask_quest and
+              ((location.vanilla_item == 'Mask of Truth' and 'Mask of Truth' in world.shuffle_child_trade) or
+               ('mask_shop' in world.misc_hints and location.vanilla_item == 'Goron Mask' and 'Goron Mask' in world.shuffle_child_trade) or
+               ('mask_shop' in world.misc_hints and location.vanilla_item == 'Zora Mask' and 'Zora Mask' in world.shuffle_child_trade) or
+               ('mask_shop' in world.misc_hints and location.vanilla_item == 'Gerudo Mask' and 'Gerudo Mask' in world.shuffle_child_trade))):
+                shop_item.func2 = 0x80863714
 
             message_id = (shop_id - 0x32) * 2
             shop_item.description_message = 0x8100 + message_id
@@ -2808,10 +2831,10 @@ def place_shop_items(rom, world, shop_items, messages, locations, init_shop_id=F
                     split_item_name[0] = create_fake_name(split_item_name[0])
 
                 if len(world.multiworld.worlds) > 1: # OOTWorld.MultiWorld.AutoWorld[]
-                    description_text = '\x08\x05\x41%s  %d Rupees\x01%s\x01\x05\x42%s\x05\x40\x01Special deal! ONE LEFT!\x09\x0A\x02' % (split_item_name[0], location.price, split_item_name[1], rom_safe_text(world.multiworld.get_player_name(location.item.player)))
+                    description_text = '\x08\x05\x41%s  %d Rupees\x01%s\x01\x05\x42%s\x05\x40\x01Special deal! ONE LEFT!\x09\x0A\x02' % (split_item_name[0], shop_item.price, split_item_name[1], rom_safe_text(world.multiworld.get_player_name(location.item.player)))
                 else:
-                    description_text = '\x08\x05\x41%s  %d Rupees\x01%s\x01\x05\x40Special deal! ONE LEFT!\x01Get it while it lasts!\x09\x0A\x02' % (split_item_name[0], location.price, split_item_name[1])
-                purchase_text = '\x08%s  %d Rupees\x09\x01%s\x01\x1B\x05\x42Buy\x01Don\'t buy\x05\x40\x02' % (split_item_name[0], location.price, split_item_name[1])
+                    description_text = '\x08\x05\x41%s  %d Rupees\x01%s\x01\x05\x40Special deal! ONE LEFT!\x01Get it while it lasts!\x09\x0A\x02' % (split_item_name[0], shop_item.price, split_item_name[1])
+                purchase_text = '\x08%s  %d Rupees\x09\x01%s\x01\x1B\x05\x42Buy\x01Don\'t buy\x05\x40\x02' % (split_item_name[0], shop_item.price, split_item_name[1])
             else:
                 if item_display.game == "Ocarina of Time":
                     shop_item_name = getSimpleHintNoPrefix(item_display)
@@ -2823,16 +2846,21 @@ def place_shop_items(rom, world, shop_items, messages, locations, init_shop_id=F
 
                 if len(world.multiworld.worlds) > 1:
                     shop_item_name = rom_safe_text(shop_item_name)
-                    do_line_break = sum(character_table[char] for char in f"{shop_item_name}  {location.price} Rupees") > NORMAL_LINE_WIDTH
-                    description_text = '\x08\x05\x41%s%s%d Rupees\x01\x05\x42%s\x05\x40\x01Special deal! ONE LEFT!\x09\x0A\x02' % (shop_item_name, '\x01' if do_line_break else '  ', location.price, rom_safe_text(world.multiworld.get_player_name(location.item.player)))
+                    do_line_break = sum(character_table[char] for char in f"{shop_item_name}  {shop_item.price} Rupees") > NORMAL_LINE_WIDTH
+                    description_text = '\x08\x05\x41%s%s%d Rupees\x01\x05\x42%s\x05\x40\x01Special deal! ONE LEFT!\x09\x0A\x02' % (shop_item_name, '\x01' if do_line_break else '  ', shop_item.price, rom_safe_text(world.multiworld.get_player_name(location.item.player)))
                 else:
-                    description_text = '\x08\x05\x41%s  %d Rupees\x01\x05\x40Special deal! ONE LEFT!\x01Get it while it lasts!\x09\x0A\x02' % (shop_item_name, location.price)
-                purchase_text = '\x08%s  %d Rupees\x09\x01\x01\x1B\x05\x42Buy\x01Don\'t buy\x05\x40\x02' % (shop_item_name, location.price)
+                    description_text = '\x08\x05\x41%s  %d Rupees\x01\x05\x40Special deal! ONE LEFT!\x01Get it while it lasts!\x09\x0A\x02' % (shop_item_name, shop_item.price)
+                purchase_text = '\x08%s  %d Rupees\x09\x01\x01\x1B\x05\x42Buy\x01Don\'t buy\x05\x40\x02' % (shop_item_name, shop_item.price)
 
             update_message_by_id(messages, shop_item.description_message, description_text, 0x03)
             update_message_by_id(messages, shop_item.purchase_message, purchase_text, 0x03)
 
-        if any(filter(lambda c: c in location.name, {'5', '6', '7', '8'})):
+            world.shop_location_flags[location.name] = shop_id - 0x32
+
+        if location.type == 'MaskShop':
+            if custom_shop_item:
+                world.current_shop_id += 1
+        elif any(filter(lambda c: c in location.name, {'5', '6', '7', '8'})):
             world.current_shop_id += 1
 
     return shop_objs

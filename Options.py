@@ -605,18 +605,27 @@ class ShuffleOcarinas(Toggle):
     display_name = "Shuffle Ocarinas"
 
 
-class ShuffleChildTrade(Choice):
-    """Controls the behavior of the start of the child trade quest.
-    Vanilla: Malon will give you the Weird Egg at Hyrule Castle.
-    Shuffle: Malon will give you a random item, and the Weird Egg is shuffled.
-    Skip Child Zelda: The game starts with Zelda already met, Zelda's Letter obtained, and the item from Impa obtained.
-    """
+child_trade_items = frozenset({
+    "Weird Egg",
+    "Chicken",
+    "Zeldas Letter",
+    "Keaton Mask",
+    "Skull Mask",
+    "Spooky Mask",
+    "Bunny Hood",
+    "Goron Mask",
+    "Zora Mask",
+    "Gerudo Mask",
+    "Mask of Truth",
+})
+
+
+class ShuffleChildTrade(OptionSet):
+    """Select the child trade sequence items to shuffle.
+    To skip Child Zelda, start with Zelda's Letter and do not shuffle Zelda's Letter."""
     display_name = "Shuffle Child Trade Item"
-    option_vanilla = 0
-    option_shuffle = 1
-    option_skip_child_zelda = 2
-    alias_false = 0
-    alias_true = 1
+    valid_keys = child_trade_items
+    default = set()
 
 
 class ShuffleCard(Toggle):
