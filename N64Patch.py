@@ -172,15 +172,23 @@ def create_patch_file(rom, rand, xor_range=(0x00B8AD30, 0x00F029A0)):
 
 
 # This will apply a patch file to a source rom to generate a patched rom.
+def _read_patch_data_from_archive(file, sub_file):
+    with zipfile.ZipFile(file, 'r') as patch_archive:
+        try:
+            with patch_archive.open(sub_file, 'r') as stream:
+                return stream.read()
+        except KeyError as ex:
+            zpf_files = [name for name in patch_archive.namelist() if name.endswith('.zpf')]
+            if len(zpf_files) == 1:
+                with patch_archive.open(zpf_files[0], 'r') as stream:
+                    return stream.read()
+            raise FileNotFoundError('Patch file missing from archive. Invalid Player ID.') from ex
+
+
 def apply_patch_file(rom, file, sub_file=None):
     # load the patch file and decompress
     if sub_file:
-        with zipfile.ZipFile(file, 'r') as patch_archive:
-            try:
-                with patch_archive.open(sub_file, 'r') as stream:
-                    patch_data = stream.read()
-            except KeyError as ex:
-                raise FileNotFoundError('Patch file missing from archive. Invalid Player ID.')
+        patch_data = _read_patch_data_from_archive(file, sub_file)
     else:
         with open(file, 'rb') as stream:
             patch_data = stream.read()
@@ -265,4 +273,3 @@ def apply_patch_file(rom, file, sub_file=None):
         # Save the new data to rom
         rom.write_bytes(block_start, data)
         block_start = block_start+block_size
-
