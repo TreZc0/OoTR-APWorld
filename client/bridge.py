@@ -302,8 +302,24 @@ def _fishing(emu: EmuLoaderClient, adult: bool) -> bool:
     return bool(emu.read_u32(FISHING_CONTEXT_ADDR) & (1 << (11 if adult else 10)))
 
 
+def _loach_fishing(emu: EmuLoaderClient) -> bool:
+    return bool(emu.read_u32(FISHING_CONTEXT_ADDR) & 0x8000)
+
+
 def _bgs(emu: EmuLoaderClient) -> bool:
     return bool(emu.read_u32(EQUIPMENT_ADDR) & (1 << 0x8))
+
+
+def _tcg_salesman(emu: EmuLoaderClient, st: OoTBridgeState) -> bool:
+    return _sc(emu, 0x10, 0x01, 0x0C) or _check_temp_context(st, 0x10, 0x00, 0x71)
+
+
+def _adult_trade(emu: EmuLoaderClient, st: OoTBridgeState, scene: int, get_item_id: int, traded_bit: int) -> bool:
+    return _sc(emu, 0x62, traded_bit, 0x10) or _check_temp_context(st, scene, 0x00, get_item_id)
+
+
+def _base_item(emu: EmuLoaderClient, st: OoTBridgeState, scene: int, get_item_id: int) -> bool:
+    return _check_temp_context(st, scene, 0x00, get_item_id)
 
 
 def _membership(emu: EmuLoaderClient) -> bool:
@@ -342,6 +358,8 @@ def _lost_woods(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
         "Deku Theater Skull Mask":           _igi(emu, 0x2, 0x6),
         "Deku Theater Mask of Truth":        _igi(emu, 0x2, 0x7),
         "LW Skull Kid":                      _igi(emu, 0x3, 0x6),
+        "LW Trade Cojiro":                   _adult_trade(emu, st, 0x5B, 0x1F, 13),
+        "LW Trade Odd Potion":               _adult_trade(emu, st, 0x5B, 0x21, 15),
         "LW Deku Scrub Near Bridge":         lw_near_bridge,
         "LW Deku Scrub Grotto Front":        lw_grotto_front,
         "LW Deku Scrub Near Deku Theater Left":  _scrub(emu, 0x5B, 0x2),
@@ -480,10 +498,22 @@ def _lon_lon_ranch(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
 
 def _market(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
     return {
+        "Gift from Sages":                  _check_temp_context(st, 0xFF, 0x05, 0x03),
         "Market Shooting Gallery Reward":      _igi(emu, 0x0, 0x5),
         "Market Bombchu Bowling First Prize":  _igi(emu, 0x3, 0x1),
         "Market Bombchu Bowling Second Prize": _igi(emu, 0x3, 0x2),
-        "Market Treasure Chest Game Reward":   _igi(emu, 0x2, 0x3),
+        "Market Treasure Chest Game Salesman": _tcg_salesman(emu, st),
+        "Market Treasure Chest Game Room 1 Bottom": _chest(emu, st, 0x10, 0x00),
+        "Market Treasure Chest Game Room 1 Top":    _chest(emu, st, 0x10, 0x01),
+        "Market Treasure Chest Game Room 2 Bottom": _chest(emu, st, 0x10, 0x02),
+        "Market Treasure Chest Game Room 2 Top":    _chest(emu, st, 0x10, 0x03),
+        "Market Treasure Chest Game Room 3 Bottom": _chest(emu, st, 0x10, 0x04),
+        "Market Treasure Chest Game Room 3 Top":    _chest(emu, st, 0x10, 0x05),
+        "Market Treasure Chest Game Room 4 Bottom": _chest(emu, st, 0x10, 0x06),
+        "Market Treasure Chest Game Room 4 Top":    _chest(emu, st, 0x10, 0x07),
+        "Market Treasure Chest Game Room 5 Bottom": _chest(emu, st, 0x10, 0x08),
+        "Market Treasure Chest Game Room 5 Top":    _chest(emu, st, 0x10, 0x09),
+        "Market Treasure Chest Game Reward":   _igi(emu, 0x2, 0x3) or _chest(emu, st, 0x10, 0x0A),
         "Market Lost Dog":                     _inf(emu, 0x33, 0x1),
         "Market 10 Big Poes":                  _poe_bottle(emu, st),
         "ToT Light Arrows Cutscene":           _event(emu, 0xC, 0x4),
@@ -518,6 +548,9 @@ def _kakariko_village(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
     return {
         "Kak Anju as Child":                _igi(emu, 0x0, 0x4),
         "Kak Anju as Adult":                _igi(emu, 0x4, 0x4),
+        "Kak Anju Trade Pocket Cucco":      _adult_trade(emu, st, 0x52, 0x0E, 12),
+        "Kak Granny Trade Odd Mushroom":    _adult_trade(emu, st, 0x4E, 0x20, 14),
+        "Kak Granny Buy Blue Potion":       _sc(emu, 0x4E, 0x00, 0x10) or _base_item(emu, st, 0x4E, 0x12),
         "Kak Impas House Freestanding PoH": _ground(emu, st, 0x37, 0x1),
         "Kak Windmill Freestanding PoH":    _ground(emu, st, 0x48, 0x1),
         "Kak Man on Roof":                  _igi(emu, 0x3, 0x5),
@@ -529,6 +562,7 @@ def _kakariko_village(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
         "Kak 30 Gold Skulltula Reward":     _event(emu, 0xD, 0xC),
         "Kak 40 Gold Skulltula Reward":     _event(emu, 0xD, 0xD),
         "Kak 50 Gold Skulltula Reward":     _event(emu, 0xD, 0xE),
+        "Kak 100 Gold Skulltula Reward":    _base_item(emu, st, 0x50, 0x56),
         "Kak Impas House Cow":              _cow(emu, st, 0x37, 0x18),
         "Kak GS Tree":                      _skulltula(emu, 0x10, 0x5),
         "Kak GS Near Gate Guard":           _skulltula(emu, 0x10, 0x1),
@@ -664,7 +698,9 @@ def _death_mountain_trail(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
         "DMT Chest":                  _chest(emu, st, 0x60, 0x01),
         "DMT Storms Grotto Chest":    _chest(emu, st, 0x3E, 0x17),
         "DMT Great Fairy Reward":     dmt_fairy,
-        "DMT Biggoron":               _bgs(emu),
+        "DMT Biggoron":               _bgs(emu) or _adult_trade(emu, st, 0x60, 0x57, 21),
+        "DMT Trade Broken Sword":     _adult_trade(emu, st, 0x60, 0x23, 17),
+        "DMT Trade Eyedrops":         _adult_trade(emu, st, 0x60, 0x26, 20),
         "DMT Cow Grotto Cow":         _cow(emu, st, 0x3E, 0x18),
         "DMT GS Near Kak":            _skulltula(emu, 0x0F, 0x2),
         "DMT GS Bean Patch":          _skulltula(emu, 0x0F, 0x1),
@@ -830,6 +866,7 @@ def _zoras_domain(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
         "ZD Diving Minigame": _event(emu, 0x3, 0x8),
         "ZD Chest":           _chest(emu, st, 0x58, 0x00),
         "ZD King Zora Thawed":_inf(emu, 0x26, 0x1),
+        "ZD Trade Prescription": _adult_trade(emu, st, 0x58, 0x24, 18),
         "ZD GS Frozen Waterfall":_skulltula(emu, 0x11, 0x6),
         "ZD Shop Item 5":     _shop(emu, 0x2, 0x0),
         "ZD Shop Item 6":     _shop(emu, 0x2, 0x1),
@@ -916,8 +953,10 @@ def _lake_hylia(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
         "LH Underwater Item":           _event(emu, 0x3, 0x1),
         "LH Child Fishing":             _fishing(emu, False),
         "LH Adult Fishing":             _fishing(emu, True),
+        "LH Loach Fishing":             _loach_fishing(emu),
         "LH Lab Dive":                  _igi(emu, 0x3, 0x0),
         "LH Freestanding PoH":          _ground(emu, st, 0x57, 0x1E),
+        "LH Trade Eyeball Frog":        _adult_trade(emu, st, 0x38, 0x25, 19),
         "LH Sun":                       _fire_arrows(emu, st, 0x57, 0x0),
         "LH Deku Scrub Grotto Left":    _scrub(emu, 0x19, 0x1),
         "LH Deku Scrub Grotto Center":  _scrub(emu, 0x19, 0x4),
@@ -976,6 +1015,7 @@ def _gerudo_valley(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
         "GV Chest":                      _chest(emu, st, 0x5A, 0x00),
         "GV Deku Scrub Grotto Front":    _scrub(emu, 0x1A, 0x9),
         "GV Deku Scrub Grotto Rear":     _scrub(emu, 0x1A, 0x8),
+        "GV Trade Poachers Saw":         _adult_trade(emu, st, 0x5A, 0x22, 16),
         "GV Cow":                        _cow(emu, st, 0x5A, 0x18),
         "GV GS Small Bridge":            _skulltula(emu, 0x13, 0x1),
         "GV GS Bean Patch":              _skulltula(emu, 0x13, 0x0),
@@ -992,6 +1032,7 @@ def _gerudo_fortress(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
         "Hideout 4 Torches Jail Gerudo Key":_ground(emu, st, 0xC, 0xE),
         "Hideout Gerudo Membership Card":  _membership(emu),
         "GF Chest":                        _chest(emu, st, 0x5D, 0x0),
+        "GF Freestanding PoH":             _ground(emu, st, 0x5D, 0x1),
         "GF HBA 1000 Points":              _inf(emu, 0x33, 0x0),
         "GF HBA 1500 Points":              _igi(emu, 0x0, 0x7),
         "GF GS Top Floor":                 _skulltula(emu, 0x14, 0x1),

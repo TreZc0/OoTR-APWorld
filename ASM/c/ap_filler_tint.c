@@ -5,7 +5,19 @@
 #define AP_FILLER_TINT_G 8
 #define AP_FILLER_TINT_B 26
 
+typedef struct {
+    void* texture;
+    uint32_t bytes;
+    uint32_t palette_bytes;
+    uint8_t format;
+    uint8_t scene;
+} ApFillerTintCacheEntry;
+
+#define AP_FILLER_TINT_FORMAT_RGBA16 1
+#define AP_FILLER_TINT_FORMAT_CI8 2
+
 static uint8_t ap_filler_tint_buffers[AP_FILLER_TINT_SLOT_MAX][AP_FILLER_TINT_MAX_BYTES] __attribute__((aligned(16)));
+static ApFillerTintCacheEntry ap_filler_tint_cache[AP_FILLER_TINT_SLOT_MAX];
 
 static uint16_t ap_filler_tint_rgba16_pixel(uint16_t pixel) {
     uint16_t r = (pixel >> 11) & 0x1F;
@@ -38,28 +50,54 @@ void* ap_filler_resolve_texture(z64_game_t* game, z64_actor_t* actor, void* text
 
 void* ap_filler_tint_rgba16_texture(void* texture, ApFillerTintSlot slot, uint32_t bytes) {
     uint16_t* src = (uint16_t*)texture;
-    uint16_t* dst = (uint16_t*)ap_filler_tint_buffers[slot];
     uint32_t pixels = bytes >> 1;
     uint32_t addr = (uint32_t)texture;
 
-    if (texture == 0 || (addr >> 24) < 0x10 || bytes > AP_FILLER_TINT_MAX_BYTES) {
+    if (texture == 0 || (addr >> 24) < 0x10 || bytes > AP_FILLER_TINT_MAX_BYTES || slot >= AP_FILLER_TINT_SLOT_MAX) {
         return texture;
+    }
+
+    uint16_t* dst = (uint16_t*)ap_filler_tint_buffers[slot];
+    ApFillerTintCacheEntry* cache = &ap_filler_tint_cache[slot];
+
+    if (cache->texture == texture
+        && cache->bytes == bytes
+        && cache->palette_bytes == 0
+        && cache->format == AP_FILLER_TINT_FORMAT_RGBA16
+        && cache->scene == z64_game.scene_index) {
+        return dst;
     }
 
     for (uint32_t i = 0; i < pixels; i++) {
         dst[i] = ap_filler_tint_rgba16_pixel(src[i]);
     }
 
+    cache->texture = texture;
+    cache->bytes = bytes;
+    cache->palette_bytes = 0;
+    cache->format = AP_FILLER_TINT_FORMAT_RGBA16;
+    cache->scene = z64_game.scene_index;
+
     return dst;
 }
 
 void* ap_filler_tint_ci8_texture(void* texture, ApFillerTintSlot slot, uint32_t bytes, uint32_t palette_bytes) {
     uint8_t* src = (uint8_t*)texture;
-    uint8_t* dst = ap_filler_tint_buffers[slot];
     uint32_t addr = (uint32_t)texture;
 
-    if (texture == 0 || (addr >> 24) < 0x10 || bytes > AP_FILLER_TINT_MAX_BYTES || palette_bytes > bytes) {
+    if (texture == 0 || (addr >> 24) < 0x10 || bytes > AP_FILLER_TINT_MAX_BYTES || palette_bytes > bytes || slot >= AP_FILLER_TINT_SLOT_MAX) {
         return texture;
+    }
+
+    uint8_t* dst = ap_filler_tint_buffers[slot];
+    ApFillerTintCacheEntry* cache = &ap_filler_tint_cache[slot];
+
+    if (cache->texture == texture
+        && cache->bytes == bytes
+        && cache->palette_bytes == palette_bytes
+        && cache->format == AP_FILLER_TINT_FORMAT_CI8
+        && cache->scene == z64_game.scene_index) {
+        return dst;
     }
 
     for (uint32_t i = 0; i < bytes; i++) {
@@ -70,6 +108,12 @@ void* ap_filler_tint_ci8_texture(void* texture, ApFillerTintSlot slot, uint32_t 
         uint16_t* palette = (uint16_t*)dst;
         palette[i] = ap_filler_tint_rgba16_pixel(palette[i]);
     }
+
+    cache->texture = texture;
+    cache->bytes = bytes;
+    cache->palette_bytes = palette_bytes;
+    cache->format = AP_FILLER_TINT_FORMAT_CI8;
+    cache->scene = z64_game.scene_index;
 
     return dst;
 }

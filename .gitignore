@@ -3,4 +3,10 @@ __pycache__/
 **/__pycache__/
 ASM/roms/*.z64
 ASM/tools/armips
+ASM/build/bin/
+ASM/build/bundle_r.txt
+ASM/build/bundle_d.txt
+Output
+build
 data/Compress/ARCHIVE.bin
+tmp
