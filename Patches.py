@@ -2444,7 +2444,7 @@ def get_override_entry(ootworld, location):
         type = 3
     elif location.type == 'Shop' and not (isinstance(location.item, OOTItem) and location.item.type == 'Shop'):
         type = 0
-    elif location.type == 'MaskShop' and location.vanilla_item in location.world.shuffle_child_trade:
+    elif location.type == 'MaskShop' and location.vanilla_item in ootworld.shuffle_child_trade:
         type = 0
     elif location.type == 'GrottoScrub' and not (isinstance(location.item, OOTItem) and location.item.type == 'Shop'):
         type = 4
