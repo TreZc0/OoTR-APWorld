@@ -504,11 +504,6 @@ class OOTWorld(World):
         if self.shuffle_bosses == 'off':
             self.shuffle_ganon_tower = False
         self.mixed_pools_bosses = self.shuffle_bosses == 'full'
-        if self.shuffle_dungeon_rewards == 'dungeon' and self.shuffle_bosses != 'off':
-            raise Exception(
-                f"OoT (Player {self.player}): 'Own Dungeon' reward shuffle is incompatible with boss entrance shuffle. "
-                f"Disable boss entrance shuffle or choose a different Shuffle Dungeon Rewards option."
-            )
         self.entrance_rando_reward_hints = (
             self.mixed_pools_bosses
             or self.shuffle_ganon_tower
