@@ -1285,6 +1285,9 @@ class OOTWorld(World):
         if not self.shuffle_100_skulltula_rupee:
             loc = self.multiworld.get_location("Kak 100 Gold Skulltula Reward", self.player)
             loc.parent_region.locations.remove(loc)
+        if self.shuffle_gerudo_fortress_heart_piece != 'shuffle':
+            loc = self.multiworld.get_location("GF Freestanding PoH", self.player)
+            loc.parent_region.locations.remove(loc)
 
         # Exclude locations in Ganon's Castle proportional to the number of items required to make the bridge
         # Check for dungeon ER later

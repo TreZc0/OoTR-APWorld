@@ -849,6 +849,8 @@ def get_pool_core(world):
                 location.show_in_spoiler = False
             elif world.shuffle_tcgkeys == 'remove':
                 if 'Key' in location.vanilla_item:
+                    world.multiworld.push_precollected(world.create_item(item))
+                    world.remove_from_start_inventory.append(item)
                     item = IGNORE_LOCATION
                 shuffle_item = False
                 location.show_in_spoiler = False

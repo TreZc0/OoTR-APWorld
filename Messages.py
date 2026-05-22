@@ -1377,22 +1377,23 @@ def update_map_compass_messages(messages, world):
         for dungeon in world.dungeons:
             if dungeon.name in ('Gerudo Training Ground', 'Ganons Castle'):
                 pass
-            elif dungeon.name in ('Bottom of the Well', 'Ice Cavern') and maps_exist:
-                dungeon_name, compass_id, map_id = dungeon_list[dungeon.name]
-                if 'map_dungeon_location' in world.enhance_map_compass and dungeon_entrance_shuffle:
-                    dungeon_index = [i for i, c in enumerate(dungeon_entrances) if dungeon.name in c]
-                    if dungeon.name not in ('Dodongos Cavern', 'Jabu Jabus Belly'):
-                        dungeon_name = dungeon_name.split(' ', 1)[1] # Remove the "the" to make room.
-                    if 'map_mq' in world.enhance_map_compass and (world.mq_dungeons_mode == 'random' or world.mq_dungeons_count != 0 and world.mq_dungeons_count != 12):
-                        map_message = f"\x13\x76\x08You found the \x05\x41Map\x05\x40 for\x05{COLOR_MAP['Red'] + 'masterful' if world.dungeon_mq[dungeon.name] else COLOR_MAP['Green'] + 'ordinary'}\x05\x40\x01{dungeon_name}\x05\x40! This dungeon\x01is at {dungeon_textbox_list[dungeon_index[0]]}!\x05\x40\x09"
+            elif dungeon.name in ('Bottom of the Well', 'Ice Cavern'):
+                if maps_exist:
+                    dungeon_name, compass_id, map_id = dungeon_list[dungeon.name]
+                    if 'map_dungeon_location' in world.enhance_map_compass and dungeon_entrance_shuffle:
+                        dungeon_index = [i for i, c in enumerate(dungeon_entrances) if dungeon.name in c]
+                        if dungeon.name not in ('Dodongos Cavern', 'Jabu Jabus Belly'):
+                            dungeon_name = dungeon_name.split(' ', 1)[1] # Remove the "the" to make room.
+                        if 'map_mq' in world.enhance_map_compass and (world.mq_dungeons_mode == 'random' or world.mq_dungeons_count != 0 and world.mq_dungeons_count != 12):
+                            map_message = f"\x13\x76\x08You found the \x05\x41Map\x05\x40 for\x05{COLOR_MAP['Red'] + 'masterful' if world.dungeon_mq[dungeon.name] else COLOR_MAP['Green'] + 'ordinary'}\x05\x40\x01{dungeon_name}\x05\x40! This dungeon\x01is at {dungeon_textbox_list[dungeon_index[0]]}!\x05\x40\x09"
+                        else:
+                            map_message = f"\x13\x76\x08You found the \x05\x41Map\x05\x40 for\x01{dungeon_name}\x05\x40!\x01This dungeon is at \x01{dungeon_textbox_list[dungeon_index[0]]}!\x05\x40\x09"
+                        update_message_by_id(messages, map_id, map_message, allow_duplicates=True)
                     else:
-                        map_message = f"\x13\x76\x08You found the \x05\x41Map\x05\x40 for\x01{dungeon_name}\x05\x40!\x01This dungeon is at \x01{dungeon_textbox_list[dungeon_index[0]]}!\x05\x40\x09"
-                    update_message_by_id(messages, map_id, map_message, allow_duplicates=True)
-                else:
-                    if 'map_mq' in world.enhance_map_compass:
-                        map_message = f"\x13\x76\x08You found the \x05\x41Map\x05\x40\x01for {dungeon_name}\x05\x40!\x01It\'s \x05{COLOR_MAP['Red'] + 'masterful' if world.dungeon_mq[dungeon.name] else COLOR_MAP['Green'] + 'ordinary'}\x05\x40!\x09"
-                        if world.mq_dungeons_mode == 'random' or world.mq_dungeons_count != 0 and world.mq_dungeons_count != 12:
-                            update_message_by_id(messages, map_id, map_message, allow_duplicates=True)
+                        if 'map_mq' in world.enhance_map_compass:
+                            map_message = f"\x13\x76\x08You found the \x05\x41Map\x05\x40\x01for {dungeon_name}\x05\x40!\x01It\'s \x05{COLOR_MAP['Red'] + 'masterful' if world.dungeon_mq[dungeon.name] else COLOR_MAP['Green'] + 'ordinary'}\x05\x40!\x09"
+                            if world.mq_dungeons_mode == 'random' or world.mq_dungeons_count != 0 and world.mq_dungeons_count != 12:
+                                update_message_by_id(messages, map_id, map_message, allow_duplicates=True)
             else:
                 dungeon_name, compass_id, map_id, boss_entrance = dungeon_list[dungeon.name]
                 if compasses_exist:
