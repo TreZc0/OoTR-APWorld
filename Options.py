@@ -977,27 +977,10 @@ class EnhanceMC(OptionSet):
     map_mq: Map tells if a dungeon is vanilla or MQ.
     map_dungeon_location: Map tells where a dungeon entrance leads.
     compass_boss_location: Compass tells which boss is in the dungeon.
-    compass_reward: Compass tells what dungeon reward is in the dungeon.
-
-    Backward compatibility:
-    true -> {'map_mq', 'compass_reward'}
-    false -> {}
-    """
+    compass_reward: Compass tells what dungeon reward is in the dungeon."""
     display_name = "Maps and Compasses Give Information"
     valid_keys = {"map_mq", "map_dungeon_location", "compass_boss_location", "compass_reward"}
     default = set()
-
-    @classmethod
-    def from_any(cls, data):
-        if isinstance(data, bool):
-            return cls({"map_mq", "compass_reward"} if data else set())
-        if isinstance(data, str):
-            lowered = data.strip().lower()
-            if lowered in {"true", "on", "yes", "1"}:
-                return cls({"map_mq", "compass_reward"})
-            if lowered in {"false", "off", "no", "0"}:
-                return cls(set())
-        return super().from_any(data)
 
 
 class GanonBKMedallions(Range):

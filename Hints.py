@@ -76,9 +76,11 @@ class GossipStone:
 
 class GossipText:
     def __init__(self, text: str, colors: Optional[list[str]] = None, hinted_locations: Optional[list[str]] = None,
-                 hinted_items: Optional[list[str]] = None, prefix: str = "They say that ") -> None:
+                 hinted_items: Optional[list[str]] = None, prefix: str = "They say that ",
+                 capitalize: bool = True) -> None:
         text = prefix + text
-        text = text[:1].upper() + text[1:]
+        if capitalize:
+            text = text[:1].upper() + text[1:]
         self.text: str = text
         self.colors: Optional[list[str]] = colors
         self.hinted_locations: Optional[list[str]] = hinted_locations
@@ -534,7 +536,8 @@ class HintArea(Enum):
 
     # Formats the hint text for this area with proper grammar.
     # Dungeons are hinted differently depending on the clearer_hints setting.
-    def text(self, clearer_hints: bool, preposition: bool = False, world: Optional[int] = None) -> str:
+    def text(self, clearer_hints: bool, preposition: bool = False, use_2nd_person: bool = False,
+             world: Optional[int] = None) -> str:
         if self.is_dungeon and self.dungeon_name:
             text = get_hint(self.dungeon_name, clearer_hints).text
         else:
@@ -542,7 +545,10 @@ class HintArea(Enum):
         prefix, suffix = text.replace('#', '').split(' ', 1)
         if world is None:
             if prefix == "Link's":
-                text = f"@'s {suffix}"
+                if use_2nd_person:
+                    text = f'your {suffix}'
+                else:
+                    text = f"@'s {suffix}"
         else:
             replace_prefixes = ('a', 'an', 'the')
             move_prefixes = ('outside', 'inside')
