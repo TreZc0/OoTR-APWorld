@@ -1695,6 +1695,23 @@ class SfxOcarina(Choice):
     option_flute = 6
     default = 1
 
+
+class SfxLinkVoice(Choice):
+    """Change Link's voice in the adjuster. Custom voices can be placed in voices/oot/Adult or voices/oot/Child."""
+    option_default = 0
+    option_silent = 1
+    option_feminine = 2
+    default = 0
+
+
+class SfxLinkAdultVoice(SfxLinkVoice):
+    display_name = "Adult Voice"
+
+
+class SfxLinkChildVoice(SfxLinkVoice):
+    display_name = "Child Voice"
+
+
 sfx_options: typing.Dict[str, type(Option)] = {
     "sfx_navi_overworld":   sfx_navi_overworld,
     "sfx_navi_enemy":       sfx_navi_enemy,
@@ -1717,6 +1734,11 @@ sfx_options: typing.Dict[str, type(Option)] = {
     "sfx_daybreak":         sfx_daybreak,
     "sfx_cucco":            sfx_cucco,
     "sfx_ocarina":          SfxOcarina,
+}
+
+voice_options: typing.Dict[str, type(Option)] = {
+    "sfx_link_adult":        SfxLinkAdultVoice,
+    "sfx_link_child":        SfxLinkChildVoice,
 }
 
 

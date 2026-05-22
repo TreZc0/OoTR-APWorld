@@ -8,8 +8,8 @@ from itertools import chain
 from BaseClasses import MultiWorld
 from Options import Choice, Range, Toggle
 from . import OOTWorld, launch_rom as launch_oot_rom
-from .Cosmetics import patch_cosmetics
-from .Options import (cosmetic_options, sfx_options,
+from .Cosmetics import get_voice_choices, patch_cosmetics, patch_voices
+from .Options import (cosmetic_options, sfx_options, voice_options,
     DpadDungeonMenu, SpeedupMusicForLastTriforcePiece, SlowdownMusicWhenLowhp,
     UninvertYAxisInFirstPersonCamera, InputViewer, DisableBattleMusic, CreditsMusic)
 from .Rom import Rom, compress_rom_file
@@ -30,7 +30,7 @@ def main(launcher_args):
         help='Path to an OoT randomized ROM to adjust.')
     parser.add_argument('--vanilla_rom', default='',
         help='Path to a vanilla OoT ROM for patching.')
-    for name, option in chain(cosmetic_options.items(), sfx_options.items()):
+    for name, option in chain(cosmetic_options.items(), sfx_options.items(), voice_options.items()):
         parser.add_argument('--'+name, default=None,
             help=option.__doc__)
     parser.add_argument('--music_dir', default=None,
@@ -208,6 +208,19 @@ def adjustGUI():
     dropdown_option('sfx', 'sfx_daybreak', 20, 1)
     dropdown_option('sfx', 'sfx_cucco', 20, 2)
 
+    def voice_dropdown(option_name, age, row, column):
+        option = voice_options[option_name]
+        optionFrame = Frame(romSettingsFrame)
+        optionFrame.grid(row=row, column=column, sticky=E)
+        optionLabel = Label(optionFrame, text=option.display_name)
+        optionLabel.pack(side=LEFT)
+        setattr(opts, option_name, StringVar(value='Default'))
+        optionMenu = OptionMenu(optionFrame, getattr(opts, option_name), *get_voice_choices(age))
+        optionMenu.pack(side=LEFT)
+
+    voice_dropdown('sfx_link_adult', 1, 21, 0)
+    voice_dropdown('sfx_link_child', 0, 21, 1)
+
     # Special cases
     # Sword trail duration is a range
     option = cosmetic_options['sword_trail_duration']
@@ -222,25 +235,25 @@ def adjustGUI():
 
     # Toggle cosmetic options as checkboxes
     opts.dpad_dungeon_menu = IntVar(value=DpadDungeonMenu.default)
-    Checkbutton(romSettingsFrame, text="D-Pad Dungeon Info", variable=opts.dpad_dungeon_menu).grid(row=21, column=0, sticky=W)
+    Checkbutton(romSettingsFrame, text="D-Pad Dungeon Info", variable=opts.dpad_dungeon_menu).grid(row=22, column=0, sticky=W)
 
     opts.speedup_music_for_last_triforce_piece = IntVar(value=SpeedupMusicForLastTriforcePiece.default)
-    Checkbutton(romSettingsFrame, text="Speed Up Music (Last Triforce Piece)", variable=opts.speedup_music_for_last_triforce_piece).grid(row=21, column=1, sticky=W)
+    Checkbutton(romSettingsFrame, text="Speed Up Music (Last Triforce Piece)", variable=opts.speedup_music_for_last_triforce_piece).grid(row=22, column=1, sticky=W)
 
     opts.slowdown_music_when_lowhp = IntVar(value=SlowdownMusicWhenLowhp.default)
-    Checkbutton(romSettingsFrame, text="Slowdown Music When Low HP", variable=opts.slowdown_music_when_lowhp).grid(row=21, column=2, sticky=W)
+    Checkbutton(romSettingsFrame, text="Slowdown Music When Low HP", variable=opts.slowdown_music_when_lowhp).grid(row=22, column=2, sticky=W)
 
     opts.uninvert_y_axis_in_first_person_camera = IntVar(value=UninvertYAxisInFirstPersonCamera.default)
-    Checkbutton(romSettingsFrame, text="Uninvert Y-Axis (First Person)", variable=opts.uninvert_y_axis_in_first_person_camera).grid(row=22, column=0, sticky=W)
+    Checkbutton(romSettingsFrame, text="Uninvert Y-Axis (First Person)", variable=opts.uninvert_y_axis_in_first_person_camera).grid(row=23, column=0, sticky=W)
 
     opts.input_viewer = IntVar(value=InputViewer.default)
-    Checkbutton(romSettingsFrame, text="Input Viewer", variable=opts.input_viewer).grid(row=22, column=1, sticky=W)
+    Checkbutton(romSettingsFrame, text="Input Viewer", variable=opts.input_viewer).grid(row=23, column=1, sticky=W)
 
 
     # Deathlink is a checkbox
     opts.deathlink = IntVar(value=0)
     deathlink_checkbox = Checkbutton(romSettingsFrame, text="DeathLink (Team Deaths)", variable=opts.deathlink)
-    deathlink_checkbox.grid(row=23, column=1, sticky=W)
+    deathlink_checkbox.grid(row=24, column=1, sticky=W)
 
     romSettingsFrame.pack(side=TOP)
 
@@ -284,7 +297,7 @@ def adjust(args):
     multiworld = MultiWorld(1)
     ootworld = OOTWorld(multiworld, 1)
     # Set options in the fake OOTWorld
-    for name, option in chain(cosmetic_options.items(), sfx_options.items()):
+    for name, option in chain(cosmetic_options.items(), sfx_options.items(), voice_options.items()):
         result = getattr(args, name, None)
         if result is None:
             if issubclass(option, Choice):
@@ -322,6 +335,7 @@ def adjust(args):
     # Call patch_cosmetics
     try:
         patch_cosmetics(ootworld, rom)
+        patch_voices(rom, ootworld, {})
         rom.write_byte(rom.sym('DEATH_LINK'), args.deathlink)
         # Output new file
         path_pieces = os.path.splitext(args.rom)

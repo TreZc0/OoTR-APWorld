@@ -1,9 +1,12 @@
 from .Utils import data_path
 from .Colors import *
 import logging
+import os
+from itertools import chain
 from . import Music as music
 from . import Sounds as sfx
 from . import IconManip as icon
+from Utils import local_path
 
 logger = logging.getLogger('')
 
@@ -724,6 +727,149 @@ def patch_instrument(rom, ootworld, symbols):
 
     rom.write_byte(0x00B53C7B, instruments[choice])
     rom.write_byte(0x00B4BF6F, instruments[choice]) # For Lost Woods Skull Kids' minigame in Lost Woods
+
+
+def _voice_age_name(age):
+    return 'Child' if age == 0 else 'Adult'
+
+
+def _voice_base_path(*parts):
+    return os.path.join(data_path('Voices'), *parts)
+
+
+def _voice_user_path(*parts):
+    return local_path('voices', 'oot', *parts)
+
+
+def _voice_roots(age_name):
+    return [
+        _voice_user_path(age_name),
+        _voice_base_path(age_name),
+    ]
+
+
+def get_voice_choices(age, include_random=True):
+    age_name = _voice_age_name(age) if isinstance(age, int) else age
+    choices = {'default': 'Default', 'silent': 'Silent'}
+    for root in reversed(_voice_roots(age_name)):
+        if not os.path.isdir(root):
+            continue
+        for entry in os.listdir(root):
+            path = os.path.join(root, entry)
+            if os.path.isdir(path):
+                choices[entry.casefold()] = entry
+    names = list(choices.values())
+    if include_random and len(names) > 2:
+        names.append('Random')
+    return names
+
+
+def _normalize_voice_setting(voice_setting):
+    voice_setting = str(voice_setting or 'Default').strip().replace('_', ' ')
+    special_names = {
+        'default': 'Default',
+        'silent': 'Silent',
+        'random': 'Random',
+    }
+    return special_names.get(voice_setting.casefold(), voice_setting)
+
+
+def _find_voice_path(age_name, voice_setting):
+    for root in _voice_roots(age_name):
+        candidate = os.path.join(root, voice_setting)
+        if os.path.isdir(candidate):
+            return candidate
+        if not os.path.isdir(root):
+            continue
+        for entry in os.listdir(root):
+            if entry.casefold() == voice_setting.casefold():
+                return os.path.join(root, entry)
+    return None
+
+
+def _find_silent_voice_path():
+    for path in (_voice_user_path('SilentVoiceSFX.bin'), _voice_base_path('SilentVoiceSFX.bin')):
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def read_default_voice_data(rom):
+    audiobank = 0xD390
+    audiotable = 0x79470
+    soundbank = audiobank + rom.read_int32(audiobank + 0x4)
+    n_sfx = 0x88
+
+    soundbank_entries = {}
+    for i in range(n_sfx):
+        audiobank_offset = rom.read_int32(soundbank + i * 0x8)
+        sfxid = f"00-00{i:02x}"
+        soundbank_entries[sfxid] = {
+            "length": rom.read_int32(audiobank + audiobank_offset),
+            "romoffset": audiotable + rom.read_int32(audiobank + audiobank_offset + 0x4),
+        }
+    return soundbank_entries
+
+
+def _patch_voice_bin(rom, sfxid, binsfx, soundbank_entries, source_name):
+    if sfxid not in soundbank_entries:
+        logger.error(f"Voice patch skipped unknown SFX file {source_name}.")
+        return
+    length = soundbank_entries[sfxid]["length"]
+    if len(binsfx) > length:
+        logger.error(f"Voice patch skipped oversized SFX file {source_name}.")
+        return
+    rom.write_bytes(soundbank_entries[sfxid]["romoffset"], binsfx.ljust(length, b'\0'))
+
+
+def patch_silent_voice(rom, sfxidlist, soundbank_entries):
+    voice_path = _find_silent_voice_path()
+    if voice_path is None:
+        logger.error(f"Could not find silent voice sfx at {_voice_user_path('SilentVoiceSFX.bin')} or {_voice_base_path('SilentVoiceSFX.bin')}. Skipping voice patching.")
+        return
+
+    with open(voice_path, 'rb') as binsfxin:
+        binsfx = bytearray(binsfxin.read())
+
+    for decid in sfxidlist:
+        sfxid = f"00-00{decid:02x}"
+        _patch_voice_bin(rom, sfxid, binsfx, soundbank_entries, voice_path)
+
+
+def apply_voice_patch(rom, voice_path, soundbank_entries):
+    for binsfxfilename in os.listdir(voice_path):
+        if not binsfxfilename.lower().endswith(".bin"):
+            continue
+        sfxid = binsfxfilename.split('.')[0].lower()
+        bin_path = os.path.join(voice_path, binsfxfilename)
+        with open(bin_path, 'rb') as binsfxin:
+            binsfx = bytearray(binsfxin.read())
+        _patch_voice_bin(rom, sfxid, binsfx, soundbank_entries, bin_path)
+
+
+def patch_voices(rom, ootworld, symbols):
+    rom.write_bytes(0x00079470, rom.original.read_bytes(0x00079470, 0x460AD0))
+
+    soundbank_entries = read_default_voice_data(rom)
+    voice_ages = (
+        ('Child', getattr(ootworld, 'sfx_link_child', 'Default'), get_voice_choices(0, False), chain([0x14, 0x87], range(0x1C, 0x36 + 1), range(0x3E, 0x4C + 1))),
+        ('Adult', getattr(ootworld, 'sfx_link_adult', 'Default'), get_voice_choices(1, False), chain([0x37, 0x38, 0x3C, 0x3D, 0x86], range(0x00, 0x13 + 1), range(0x15, 0x1B + 1), range(0x4D, 0x58 + 1))),
+    )
+
+    for age_name, voice_setting, choices, silence_sfx_ids in voice_ages:
+        voice_setting = _normalize_voice_setting(voice_setting)
+        if voice_setting == 'Random':
+            random_choices = [choice for choice in choices if choice not in {'Default', 'Silent'}]
+            voice_setting = ootworld.random.choice(random_choices) if random_choices else 'Default'
+
+        if voice_setting == 'Silent':
+            patch_silent_voice(rom, silence_sfx_ids, soundbank_entries)
+        elif voice_setting != 'Default':
+            voice_path = _find_voice_path(age_name, voice_setting)
+            if voice_path is None:
+                logger.error(f"{age_name} Voice not patched: Cannot find voice data directory for {voice_setting}.")
+                continue
+            apply_voice_patch(rom, voice_path, soundbank_entries)
 
 
 legacy_cosmetic_data_headers = [
