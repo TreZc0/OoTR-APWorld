@@ -1938,9 +1938,7 @@ goalTable: dict[str, tuple[str, str, str]] = {
 # This specifies which hints will never appear due to either having known or known useless contents or due to the locations not existing.
 def hint_exclusions(world: World, clear_cache: bool = False) -> list[str]:
     exclusions: dict[int, list[str]] = hint_exclusions.exclusions
-    cache_key = getattr(world, "id", None)
-    if cache_key is None:
-        cache_key = getattr(world, "player", id(world))
+    cache_key = id(world)
 
     if not clear_cache and cache_key in exclusions:
         return exclusions[cache_key]

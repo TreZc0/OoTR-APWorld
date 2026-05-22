@@ -125,6 +125,12 @@ class OOTCollectionState(metaclass=AutoLogicRegister):
         """Returns True if the player has at least 'count' dungeon rewards (stones + medallions)."""
         return self.has_group_unique("rewards", player, count)
 
+    def has_hearts(self, count: int, player: int) -> bool:
+        """Returns True if the player has at least 'count' total hearts."""
+        containers = self.count("Heart Container", player)
+        pieces = self.count("Piece of Heart", player) + self.count("Piece of Heart (Treasure Chest Game)", player)
+        return 3 + containers + pieces // 4 >= count
+
     def has_soul(self, enemy: str, player: int) -> bool:
         """
         v9.0 advanced logic references enemy souls extensively.
@@ -838,15 +844,16 @@ class OOTWorld(World):
     def new_shop_price(self, location):
         if self.special_deal_price_distribution == 'vanilla':
             return item_table[location.vanilla_item][3].get('price', 0)
-        elif self.special_deal_price_max < self.special_deal_price_min:
-            raise ValueError('Maximum special deal price is lower than minimum, perhaps you meant to swap them?')
-        elif self.special_deal_price_max == self.special_deal_price_min:
-            return self.special_deal_price_min
+        price_min = min(self.special_deal_price_min, self.special_deal_price_max)
+        price_max = max(self.special_deal_price_min, self.special_deal_price_max)
+
+        if price_max == price_min:
+            return price_min
         elif self.special_deal_price_distribution == 'betavariate':
-            return self.special_deal_price_min + int(
-                self.random.betavariate(1.5, 2) * (self.special_deal_price_max - self.special_deal_price_min) / 5) * 5
+            return price_min + int(
+                self.random.betavariate(1.5, 2) * (price_max - price_min) / 5) * 5
         elif self.special_deal_price_distribution == 'uniform':
-            return self.random.randrange(self.special_deal_price_min, self.special_deal_price_max + 1, 5)
+            return self.random.randrange(price_min, price_max + 1, 5)
         else:
             raise NotImplementedError(
                 f'Unimplemented special deal distribution: {self.special_deal_price_distribution}')

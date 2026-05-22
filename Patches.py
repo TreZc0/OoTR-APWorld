@@ -1540,12 +1540,9 @@ def patch_rom(world, rom):
     if world.shuffle_freestanding_items:
     # Get freestanding item locations
         actor_override_locations = [location for location in world.get_locations() if location.disabled == DisableType.ENABLED and location.type == 'ActorOverride']
-        rupeetower_locations = [location for location in world.get_locations() if location.disabled == DisableType.ENABLED and location.type == 'RupeeTower']
 
         for location in actor_override_locations:
             patch_actor_override(location, rom)
-        for location in rupeetower_locations:
-            patch_rupee_tower(location, rom)
 
     # Write flag table data
     xflags_tables, alt_list = build_xflags_from_world(world)
@@ -2980,6 +2977,8 @@ def patch_rupee_tower(location, rom: Rom):
         room, scene_setup, flag, _subflag = default
     else:
         raise Exception(f"Location does not have compatible data for patch_rupee_tower: {location.name}")
+    if location.scene == 0x3E:
+        return
     flag = flag | (room << 8) | (scene_setup << 14)
     if location.address1:
         for address in location.address1:
