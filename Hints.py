@@ -144,9 +144,12 @@ gossipLocations_reversemap: dict[str, int] = {
 
 def get_item_generic_name(item: Item) -> str:
     if getattr(item, "unshuffled_dungeon_item", False):
-        return item.type
+        return getattr(item, "type", item.name)
     else:
         return item.name
+    
+def get_item_type(item: Item) -> Optional[str]:
+    return getattr(item, 'type', None)
 
 
 def get_item_hint_text(item: Item, world: 'OOTWorld') -> str:
@@ -984,7 +987,7 @@ def get_specific_item_hint(world: 'OOTWorld', checked: set[str]) -> HintReturn:
 def get_random_location_hint(world: 'OOTWorld', checked: set[str]) -> HintReturn:
     locations = list(filter(lambda location:
         not is_checked([location], checked)
-        and location.item.type not in ('Drop', 'Event', 'Shop', 'DungeonReward')
+        and get_item_type(location.item) not in ('Drop', 'Event', 'Shop', 'DungeonReward')
         and not is_restricted_dungeon_item(location.item, world)
         and not location.locked
         and location.name not in world.hint_exclusions
@@ -1202,6 +1205,7 @@ def get_important_check_hint(world: 'OOTWorld', checked: set[str]) -> HintReturn
     for location in locations:
         region = HintArea.at(location).text(world.clearer_hints)
         if region == hint_loc:
+            item_type = get_item_type(location.item)
             if (is_major_item(location.item)
                 # exclude locked items
                 and not location.locked
@@ -1212,11 +1216,11 @@ def get_important_check_hint(world: 'OOTWorld', checked: set[str]) -> HintReturn
                 or location.item.name == 'Biggoron Sword'
                 or location.item.name == 'Double Defense'
                 # Handle make keys not in own dungeon major items
-                or (location.item.type in ('SmallKey', 'SmallKeyRing') and not (world.shuffle_smallkeys == 'dungeon' or world.shuffle_smallkeys == 'vanilla'))
-                or (location.item.type in ('HideoutSmallKey', 'HideoutSmallKeyRing') and not world.shuffle_hideoutkeys == 'vanilla')
-                or (location.item.type in ('TCGSmallKey', 'TCGSmallKeyRing') and not world.shuffle_tcgkeys == 'vanilla')
-                or (location.item.type == 'BossKey' and not (world.shuffle_bosskeys == 'dungeon' or world.shuffle_bosskeys == 'vanilla'))
-                or (location.item.type == 'GanonBossKey' and not (world.shuffle_ganon_bosskey == 'vanilla'
+                or (item_type in ('SmallKey', 'SmallKeyRing') and not (world.shuffle_smallkeys == 'dungeon' or world.shuffle_smallkeys == 'vanilla'))
+                or (item_type in ('HideoutSmallKey', 'HideoutSmallKeyRing') and not world.shuffle_hideoutkeys == 'vanilla')
+                or (item_type in ('TCGSmallKey', 'TCGSmallKeyRing') and not world.shuffle_tcgkeys == 'vanilla')
+                or (item_type == 'BossKey' and not (world.shuffle_bosskeys == 'dungeon' or world.shuffle_bosskeys == 'vanilla'))
+                or (item_type == 'GanonBossKey' and not (world.shuffle_ganon_bosskey == 'vanilla'
                     or world.shuffle_ganon_bosskey == 'dungeon' or world.shuffle_ganon_bosskey == 'on_lacs'
                     or world.shuffle_ganon_bosskey == 'stones' or world.shuffle_ganon_bosskey == 'medallions'
                     or world.shuffle_ganon_bosskey == 'dungeons' or world.shuffle_ganon_bosskey == 'tokens'))):
