@@ -53,6 +53,8 @@ def adjustGUI():
         StringVar, IntVar, Checkbutton, Frame, Label, X, Entry, Button, \
         OptionMenu, filedialog, messagebox, ttk
     from argparse import Namespace
+    import threading
+    from queue import Empty, Queue
     from Utils import __version__ as MWVersion
     try:
         from Utils import instance_name as apname
@@ -257,28 +259,108 @@ def adjustGUI():
 
     romSettingsFrame.pack(side=TOP)
 
+    progress_overlay = None
+
+    def make_guiargs():
+        guiargs = Namespace()
+        options = vars(opts)
+        for o in options:
+            result = options[o].get()
+            if result == 'true':
+                result = True
+            if result == 'false':
+                result = False
+            setattr(guiargs, o, result)
+        guiargs.sword_trail_duration = int(guiargs.sword_trail_duration)
+        return guiargs
+
+    def show_progress_overlay(progress_text):
+        nonlocal progress_overlay
+        progress_overlay = tk.Toplevel(window)
+        progress_overlay.wm_title("Adjusting ROM")
+        progress_overlay.resizable(False, False)
+        progress_overlay.transient(window)
+        progress_overlay.protocol("WM_DELETE_WINDOW", lambda: None)
+
+        progress_frame = Frame(progress_overlay, padx=20, pady=16)
+        progress_label = Label(progress_frame, textvariable=progress_text)
+        progress_bar = ttk.Progressbar(progress_frame, mode="indeterminate", length=280)
+        progress_label.pack(side=TOP, anchor=W)
+        progress_bar.pack(side=TOP, fill=X, pady=(10, 0))
+        progress_frame.pack(side=TOP, fill=X)
+        progress_bar.start(12)
+
+        progress_overlay.update_idletasks()
+        window_x = window.winfo_rootx()
+        window_y = window.winfo_rooty()
+        window_width = window.winfo_width()
+        window_height = window.winfo_height()
+        overlay_width = progress_overlay.winfo_width()
+        overlay_height = progress_overlay.winfo_height()
+        x = window_x + max(0, (window_width - overlay_width) // 2)
+        y = window_y + max(0, (window_height - overlay_height) // 2)
+        progress_overlay.geometry(f"+{x}+{y}")
+        progress_overlay.grab_set()
+
+    def hide_progress_overlay():
+        nonlocal progress_overlay
+        if progress_overlay is None:
+            return
+        try:
+            progress_overlay.grab_release()
+        except tk.TclError:
+            pass
+        progress_overlay.destroy()
+        progress_overlay = None
+
     def adjustRom():
         try:
-            guiargs = Namespace()
-            options = vars(opts)
-            for o in options:
-                result = options[o].get()
-                if result == 'true':
-                    result = True
-                if result == 'false':
-                    result = False
-                setattr(guiargs, o, result)
-            guiargs.sword_trail_duration = int(guiargs.sword_trail_duration)
-            path = adjust(guiargs)
+            guiargs = make_guiargs()
         except Exception as e:
             logging.exception(e)
             messagebox.showerror(title="Error while adjusting Rom", message=str(e))
-        else:
-            from worlds.LauncherComponents import launch_subprocess
-            from .client import main as client_main
-            launch_rom(path)
-            launch_subprocess(client_main, name="OoTClient")
-            messagebox.showinfo(title="Success", message=f"Rom adjusted to {path}")
+            return
+
+        result_queue = Queue()
+        progress_text = StringVar(value="Preparing ROM adjustment...")
+        adjustButton.configure(state="disabled")
+        show_progress_overlay(progress_text)
+
+        def worker():
+            try:
+                path = adjust(guiargs, status_callback=lambda status: result_queue.put(("status", status)))
+                result_queue.put(("success", path))
+            except Exception as e:
+                logging.exception(e)
+                result_queue.put(("error", e))
+
+        def check_result():
+            try:
+                while True:
+                    result, value = result_queue.get_nowait()
+                    if result == "status":
+                        progress_text.set(value)
+                        continue
+
+                    hide_progress_overlay()
+                    adjustButton.configure(state="normal")
+
+                    if result == "error":
+                        messagebox.showerror(title="Error while adjusting Rom", message=str(value))
+                        return
+
+                    path = value
+                    from worlds.LauncherComponents import launch_subprocess
+                    from .client import main as client_main
+                    launch_rom(path)
+                    launch_subprocess(client_main, name="OoTClient")
+                    messagebox.showinfo(title="Success", message=f"Rom adjusted to {path}")
+                    return
+            except Empty:
+                window.after(100, check_result)
+
+        threading.Thread(target=worker, daemon=True).start()
+        window.after(100, check_result)
 
     # Adjust button
     bottomFrame = Frame(window)
@@ -292,8 +374,13 @@ def set_icon(window):
     logo = tk.PhotoImage(file=local_path('data', 'icon.png'))
     window.tk.call('wm', 'iconphoto', window._w, logo)
 
-def adjust(args):
+def adjust(args, status_callback=None):
+    def update_status(status):
+        if status_callback:
+            status_callback(status)
+
     # Create a fake multiworld and OOTWorld to use as a base
+    update_status("Preparing options...")
     multiworld = MultiWorld(1)
     ootworld = OOTWorld(multiworld, 1)
     # Set options in the fake OOTWorld
@@ -318,14 +405,17 @@ def adjust(args):
     delete_zootdec = False
     if os.path.splitext(args.rom)[-1] in ['.z64', '.n64']:
         # Load up the ROM
+        update_status("Loading ROM...")
         rom = Rom(file=args.rom, force_use=True)
         delete_zootdec = True
     elif os.path.splitext(args.rom)[-1] in ['.apz5', '.zpf']:
         # Load vanilla ROM
+        update_status("Loading base ROM...")
         rom = Rom(file=args.vanilla_rom, force_use=True)
         apz5_file = args.rom
         base_name = os.path.splitext(apz5_file)[0]
         # Patch file
+        update_status("Applying patch file...")
         apply_patch_file(rom, apz5_file,
             sub_file=(os.path.basename(base_name) + '.zpf'
                 if zipfile.is_zipfile(apz5_file)
@@ -334,16 +424,21 @@ def adjust(args):
         raise Exception("Invalid file extension; requires .n64, .z64, .apz5, .zpf")
     # Call patch_cosmetics
     try:
+        update_status("Applying cosmetic changes...")
         patch_cosmetics(ootworld, rom)
+        update_status("Applying voice changes...")
         patch_voices(rom, ootworld, {})
         rom.write_byte(rom.sym('DEATH_LINK'), args.deathlink)
         # Output new file
         path_pieces = os.path.splitext(args.rom)
         decomp_path = path_pieces[0] + '-adjusted-decomp.n64'
         comp_path = path_pieces[0] + '-adjusted.n64'
+        update_status("Writing adjusted ROM...")
         rom.write_to_file(decomp_path)
+        update_status("Compressing adjusted ROM...")
         compress_rom_file(decomp_path, comp_path)
         os.remove(decomp_path)
+        update_status("Finishing...")
     finally:
         if delete_zootdec:
             decomp_file = user_path('ZOOTDEC.z64')
