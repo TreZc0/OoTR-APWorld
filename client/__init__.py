@@ -323,11 +323,15 @@ async def n64_sync_task(ctx: OoTContext):
 
 
 async def run_game(romfile, ctx: OoTContext | None = None):
-    status_callback = None if ctx is None else lambda text: show_client_message(ctx, text)
-    launch_rom(romfile, logger, status_callback)
+    loop = asyncio.get_running_loop()
+    status_callback = (
+        None if ctx is None
+        else lambda text: loop.call_soon_threadsafe(show_client_message, ctx, text)
+    )
+    await asyncio.to_thread(launch_rom, romfile, logger, status_callback)
 
 
-async def patch_and_run_game(apz5_file, ctx: OoTContext | None = None):
+def patch_game(apz5_file):
     apz5_file = os.path.abspath(apz5_file)
     base_name = os.path.splitext(apz5_file)[0]
     decomp_path = base_name + '-decomp.z64'
@@ -346,7 +350,32 @@ async def patch_and_run_game(apz5_file, ctx: OoTContext | None = None):
     rom.write_to_file(decomp_path)
     compress_rom_file(decomp_path, comp_path)
     os.remove(decomp_path)
-    async_start(run_game(comp_path, ctx))
+    return comp_path
+
+
+async def patch_and_run_game(apz5_file, ctx: OoTContext | None = None):
+    try:
+        comp_path = await asyncio.to_thread(patch_game, apz5_file)
+    except Exception:
+        logger.exception("Failed to patch OoT APZ5 file.")
+        return
+
+    await run_game(comp_path, ctx)
+
+
+def load_n64_bridge_task():
+    from .bridge import n64_bridge_task
+    return n64_bridge_task
+
+
+async def start_n64_bridge(ctx: OoTContext):
+    try:
+        n64_bridge_task = await asyncio.to_thread(load_n64_bridge_task)
+    except Exception:
+        logger.exception("OoT Bridge: failed to load native bridge.")
+        return
+
+    await n64_bridge_task(ctx)
 
 
 def main(*launcher_args: str):
@@ -371,8 +400,7 @@ def main(*launcher_args: str):
         ctx.run_cli()
 
         # Start the native emulator bridge (serves on localhost:28921)
-        from .bridge import n64_bridge_task
-        asyncio.create_task(n64_bridge_task(ctx), name="N64 Bridge")
+        asyncio.create_task(start_n64_bridge(ctx), name="N64 Bridge")
 
         ctx.n64_sync_task = asyncio.create_task(n64_sync_task(ctx), name="N64 Sync")
 
