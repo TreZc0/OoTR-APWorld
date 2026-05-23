@@ -792,7 +792,10 @@ def get_barren_hint(world: 'OOTWorld', checked: set[str], all_checked: set[str])
 
     area_weights = [world.empty_areas[area]['weight'] for area in areas]
 
-    area = random.choices(areas, weights=area_weights)[0]
+    if sum(area_weights) > 0:
+        area = random.choices(areas, weights=area_weights)[0]
+    else:
+        area = random.choice(areas)
     if world.empty_areas[area]['dungeon']:
         world.barren_dungeon += 1
 
@@ -1373,6 +1376,7 @@ def build_gossip_hints(worlds: list['OOTWorld']) -> None:
 def build_world_gossip_hints(world: 'OOTWorld', checked_locations: Optional[set[str]] = None) -> None:
     world.barren_dungeon = 0
     world.woth_dungeon = 0
+    hint_exclusions(world, clear_cache=True)
 
     # TODO: Implement proper reachability check using AP's CollectionState
     # For now, make all gossip stones reachable (matches old AP behavior)

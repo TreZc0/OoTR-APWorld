@@ -1417,11 +1417,12 @@ def update_map_compass_messages(messages, world):
                                 vanilla_boss_name = vanilla_boss_names[dungeon.name]
                                 boss_location = next(filter(lambda loc: loc.type == 'Boss', world.get_entrance(f'{dungeon} Before Boss -> {vanilla_boss_name} Boss Room').connected_region.locations))
                                 dungeon_reward = boss_location.item.name
+                                reward_color = COLOR_MAP[REWARD_COLORS.get(dungeon_reward, 'White')]
                                 if 'compass_boss_location' in world.enhance_map_compass and world.shuffle_bosses != 'off':
                                     boss_room = world.get_entrance(boss_entrance).connected_region.name
-                                    compass_message = f"\x13\x75\x08You found the \x05\x41Compass\x05\x40 for\x01{dungeon_name}\x05\x40!\x01In this dungeon, {boss_textboxes[boss_room]}\x05\x40\x01guards the \x05{COLOR_MAP[REWARD_COLORS[dungeon_reward]]}{dungeon_reward}\x05\x40!\x09"
+                                    compass_message = f"\x13\x75\x08You found the \x05\x41Compass\x05\x40 for\x01{dungeon_name}\x05\x40!\x01In this dungeon, {boss_textboxes[boss_room]}\x05\x40\x01guards the \x05{reward_color}{dungeon_reward}\x05\x40!\x09"
                                 else:
-                                    compass_message = f"\x13\x75\x08You found the \x05\x41Compass\x05\x40\x01for {dungeon_name}\x05\x40!\x01It holds the \x05{COLOR_MAP[REWARD_COLORS[dungeon_reward]]}{dungeon_reward}\x05\x40!\x09"
+                                    compass_message = f"\x13\x75\x08You found the \x05\x41Compass\x05\x40\x01for {dungeon_name}\x05\x40!\x01It holds the \x05{reward_color}{dungeon_reward}\x05\x40!\x09"
                             update_message_by_id(messages, compass_id, compass_message, allow_duplicates=True)
                         else:
                             if 'compass_boss_location' in world.enhance_map_compass and world.shuffle_bosses != 'off':

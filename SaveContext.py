@@ -326,6 +326,10 @@ class SaveContext():
                         'keys.gc': 3 if world.dungeon_mq[dungeon] else 2,
                         'total_keys.gc': 3 if world.dungeon_mq[dungeon] else 2,
                     },
+                    "Treasure Chest Game"    : {
+                        'keys.tcg': 6,
+                        'total_keys.tcg': 6,
+                    },
                 }[dungeon]
 
             elif item.startswith('Silver Rupee (') or item.startswith('Silver Rupee Pouch ('):
@@ -734,7 +738,10 @@ class SaveContext():
                 'gtg'                    : Address(size=1),
                 'fortress'               : Address(size=1),
                 'gc'                     : Address(size=1),
-                'unused'                 : Address(size=5),
+                'gt_col'                 : Address(size=1),
+                'gc_col'                 : Address(size=1),
+                'tcg'                    : Address(size=1),
+                'unused'                 : Address(size=2),
             },
             'defense_hearts'             : Address(size=1, max=20),
             'gs_tokens'                  : Address(size=2, max=100),
@@ -753,6 +760,7 @@ class SaveContext():
                 'gtg'                    : Address(0xD4 + 0x1C * 0x0B + 0x10, size=2),
                 'fortress'               : Address(0xD4 + 0x1C * 0x0C + 0x10, size=2),
                 'gc'                     : Address(0xD4 + 0x1C * 0x0D + 0x10, size=2),
+                'tcg'                    : Address(0xD4 + 0x1C * 0x10 + 0x10, size=2),
             },
             'triforce_pieces'            : Address(0xD4 + 0x1C * 0x48 + 0x10, size=4), # Unused word in scene x48
             'pending_freezes'            : Address(0xD4 + 0x1C * 0x49 + 0x10, size=4), # Unused word in scene x49
@@ -1324,6 +1332,10 @@ class SaveContext():
             'keys.gc': None,
             'total_keys.gc': None,
         },
+        "Small Key (Treasure Chest Game)"         : {
+            'keys.tcg': None,
+            'total_keys.tcg': None,
+        },
         #HACK: these counts aren't used since exact counts based on whether the dungeon is MQ are defined above,
         # but the entries need to be there for key rings to be valid starting items
         "Small Key Ring (Forest Temple)"          : {
@@ -1361,6 +1373,10 @@ class SaveContext():
         "Small Key Ring (Ganons Castle)"          : {
             'keys.gc': 3,
             'total_keys.gc': 3,
+        },
+        "Small Key Ring (Treasure Chest Game)"    : {
+            'keys.tcg': 6,
+            'total_keys.tcg': 6,
         },
 
         "Ocarina A Button"          : {'ocarina_buttons.a': True},

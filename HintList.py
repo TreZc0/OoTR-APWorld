@@ -1988,6 +1988,8 @@ hint_exclusions.exclusions = {}
 
 
 def name_is_location(name: str, hint_type: str | Collection[str], world: World) -> bool:
+    if name not in world.multiworld.regions.location_cache.get(world.player, {}):
+        return False
     if isinstance(hint_type, (list, tuple)):
         for htype in hint_type:
             if htype in ['sometimes', 'song', 'overworld', 'dungeon', 'always', 'exclude'] and name not in hint_exclusions(
