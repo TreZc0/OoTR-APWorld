@@ -4,7 +4,7 @@ OoT AP bridge: attaches to N64 emulator memory, serves connector protocol on :28
 
 import asyncio
 import json
-from typing import Dict, List, Optional, Set
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 try:
     from CommonClient import logger
@@ -13,6 +13,7 @@ except ImportError:
     logger = logging.getLogger(__name__)
 
 from .emu_loader import EmuLoaderClient
+from ..LocationList import business_scrubs, location_table
 from ..Utils import OOT_PLAYER_NAME_LENGTH, encode_oot_player_name
 
 SCRIPT_VERSION = 8
@@ -339,954 +340,297 @@ def _membership(emu: EmuLoaderClient) -> bool:
     return _event(emu, 0x9, 0) and _event(emu, 0x9, 1) and _event(emu, 0x9, 2) and _event(emu, 0x9, 3)
 
 
-def _kokiri_forest(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    c = _chest; g = _ground; sk = _skulltula; sh = _shop; cw = _cow
-    return {
-        "KF Midos Top Left Chest":    c(emu, st, 0x28, 0x00),
-        "KF Midos Top Right Chest":   c(emu, st, 0x28, 0x01),
-        "KF Midos Bottom Left Chest": c(emu, st, 0x28, 0x02),
-        "KF Midos Bottom Right Chest":c(emu, st, 0x28, 0x03),
-        "KF Kokiri Sword Chest":      c(emu, st, 0x55, 0x00),
-        "KF Storms Grotto Chest":     c(emu, st, 0x3E, 0x0C),
-        "KF Links House Cow":         cw(emu, st, 0x34, 0x18),
-        "KF GS Know It All House":    sk(emu, 0x0C, 0x1),
-        "KF GS Bean Patch":           sk(emu, 0x0C, 0x0),
-        "KF GS House of Twins":       sk(emu, 0x0C, 0x2),
-        "KF Shop Item 5":             sh(emu, 0x6, 0x0),
-        "KF Shop Item 6":             sh(emu, 0x6, 0x1),
-        "KF Shop Item 7":             sh(emu, 0x6, 0x2),
-        "KF Shop Item 8":             sh(emu, 0x6, 0x3),
-        "KF Shop Blue Rupee":         g(emu, st, 0x2D, 0x1),
-    }
-
-
-def _lost_woods(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    lw_near_bridge = _inf(emu, 0x33, 0x2) or _scrub(emu, 0x5B, 0xA)
-    lw_grotto_front = _inf(emu, 0x33, 0x3) or _scrub(emu, 0x1F, 0xB)
-    return {
-        "LW Gift from Saria":                _event(emu, 0xC, 0x1),
-        "LW Ocarina Memory Game":            _igi(emu, 0x3, 0x7),
-        "LW Target in Woods":                _igi(emu, 0x2, 0x5),
-        "LW Near Shortcuts Grotto Chest":    _chest(emu, st, 0x3E, 0x14),
-        "Deku Theater Skull Mask":           _igi(emu, 0x2, 0x6),
-        "Deku Theater Mask of Truth":        _igi(emu, 0x2, 0x7),
-        "LW Skull Kid":                      _igi(emu, 0x3, 0x6),
-        "LW Trade Cojiro":                   _adult_trade(emu, st, 0x5B, 0x1F, 13),
-        "LW Trade Odd Potion":               _adult_trade(emu, st, 0x5B, 0x21, 15),
-        "LW Deku Scrub Near Bridge":         lw_near_bridge,
-        "LW Deku Scrub Grotto Front":        lw_grotto_front,
-        "LW Deku Scrub Near Deku Theater Left":  _scrub(emu, 0x5B, 0x2),
-        "LW Deku Scrub Near Deku Theater Right": _scrub(emu, 0x5B, 0x1),
-        "LW Deku Scrub Grotto Rear":         _scrub(emu, 0x1F, 0x4),
-        "LW GS Bean Patch Near Bridge":      _skulltula(emu, 0x0D, 0x0),
-        "LW GS Bean Patch Near Theater":     _skulltula(emu, 0x0D, 0x1),
-        "LW GS Above Theater":               _skulltula(emu, 0x0D, 0x2),
-    }
-
-
-def _sacred_forest_meadow(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    return {
-        "SFM Wolfos Grotto Chest":    _chest(emu, st, 0x3E, 0x11),
-        "SFM Deku Scrub Grotto Front":_scrub(emu, 0x18, 0x9),
-        "SFM Deku Scrub Grotto Rear": _scrub(emu, 0x18, 0x8),
-        "SFM GS":                     _skulltula(emu, 0x0D, 0x3),
-    }
-
-
-def _deku_tree(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    checks = {}
-    if not _is_mq(emu, st, 0x0):
-        checks.update({
-            "Deku Tree Map Chest":               _chest(emu, st, 0x00, 0x3),
-            "Deku Tree Slingshot Room Side Chest":_chest(emu, st, 0x00, 0x5),
-            "Deku Tree Slingshot Chest":          _chest(emu, st, 0x00, 0x1),
-            "Deku Tree Compass Chest":            _chest(emu, st, 0x00, 0x2),
-            "Deku Tree Compass Room Side Chest":  _chest(emu, st, 0x00, 0x6),
-            "Deku Tree Basement Chest":           _chest(emu, st, 0x00, 0x4),
-            "Deku Tree GS Compass Room":          _skulltula(emu, 0x0, 0x3),
-            "Deku Tree GS Basement Vines":        _skulltula(emu, 0x0, 0x2),
-            "Deku Tree GS Basement Gate":         _skulltula(emu, 0x0, 0x1),
-            "Deku Tree GS Basement Back Room":    _skulltula(emu, 0x0, 0x0),
-        })
-    else:
-        checks.update({
-            "Deku Tree MQ Map Chest":                    _chest(emu, st, 0x00, 0x3),
-            "Deku Tree MQ Slingshot Chest":              _chest(emu, st, 0x00, 0x6),
-            "Deku Tree MQ Slingshot Room Back Chest":    _chest(emu, st, 0x00, 0x2),
-            "Deku Tree MQ Compass Chest":                _chest(emu, st, 0x00, 0x1),
-            "Deku Tree MQ Basement Chest":               _chest(emu, st, 0x00, 0x4),
-            "Deku Tree MQ Before Spinning Log Chest":    _chest(emu, st, 0x00, 0x5),
-            "Deku Tree MQ After Spinning Log Chest":     _chest(emu, st, 0x00, 0x0),
-            "Deku Tree MQ Deku Scrub":                   _scrub(emu, 0x00, 0x5),
-            "Deku Tree MQ GS Lobby":                     _skulltula(emu, 0x0, 0x1),
-            "Deku Tree MQ GS Compass Room":              _skulltula(emu, 0x0, 0x3),
-            "Deku Tree MQ GS Basement Graves Room":      _skulltula(emu, 0x0, 0x2),
-            "Deku Tree MQ GS Basement Back Room":        _skulltula(emu, 0x0, 0x0),
-        })
-    checks["Deku Tree Queen Gohma Heart"] = _boss_heart(emu, st, 0x11, 0x05)
-    checks["Queen Gohma"]                 = _boss_reward(st, 0x05)
-    return checks
-
-
-def _forest_temple(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    checks = {}
-    if not _is_mq(emu, st, 0x3):
-        checks.update({
-            "Forest Temple First Room Chest":              _chest(emu, st, 0x3, 0x3),
-            "Forest Temple First Stalfos Chest":           _chest(emu, st, 0x3, 0x0),
-            "Forest Temple Raised Island Courtyard Chest": _chest(emu, st, 0x3, 0x5),
-            "Forest Temple Map Chest":                     _chest(emu, st, 0x3, 0x1),
-            "Forest Temple Well Chest":                    _chest(emu, st, 0x3, 0x9),
-            "Forest Temple Eye Switch Chest":              _chest(emu, st, 0x3, 0x4),
-            "Forest Temple Boss Key Chest":                _chest(emu, st, 0x3, 0xE),
-            "Forest Temple Floormaster Chest":             _chest(emu, st, 0x3, 0x2),
-            "Forest Temple Red Poe Chest":                 _chest(emu, st, 0x3, 0xD),
-            "Forest Temple Bow Chest":                     _chest(emu, st, 0x3, 0xC),
-            "Forest Temple Blue Poe Chest":                _chest(emu, st, 0x3, 0xF),
-            "Forest Temple Falling Ceiling Room Chest":    _chest(emu, st, 0x3, 0x7),
-            "Forest Temple Basement Chest":                _chest(emu, st, 0x3, 0xB),
-            "Forest Temple GS First Room":                 _skulltula(emu, 0x03, 0x1),
-            "Forest Temple GS Lobby":                      _skulltula(emu, 0x03, 0x3),
-            "Forest Temple GS Raised Island Courtyard":    _skulltula(emu, 0x03, 0x0),
-            "Forest Temple GS Level Island Courtyard":     _skulltula(emu, 0x03, 0x2),
-            "Forest Temple GS Basement":                   _skulltula(emu, 0x03, 0x4),
-        })
-    else:
-        checks.update({
-            "Forest Temple MQ First Room Chest":                      _chest(emu, st, 0x3, 0x3),
-            "Forest Temple MQ Wolfos Chest":                          _chest(emu, st, 0x3, 0x0),
-            "Forest Temple MQ Well Chest":                            _chest(emu, st, 0x3, 0x9),
-            "Forest Temple MQ Raised Island Courtyard Lower Chest":   _chest(emu, st, 0x3, 0x1),
-            "Forest Temple MQ Raised Island Courtyard Upper Chest":   _chest(emu, st, 0x3, 0x5),
-            "Forest Temple MQ Boss Key Chest":                        _chest(emu, st, 0x3, 0xE),
-            "Forest Temple MQ Redead Chest":                          _chest(emu, st, 0x3, 0x2),
-            "Forest Temple MQ Map Chest":                             _chest(emu, st, 0x3, 0xD),
-            "Forest Temple MQ Bow Chest":                             _chest(emu, st, 0x3, 0xC),
-            "Forest Temple MQ Compass Chest":                         _chest(emu, st, 0x3, 0xF),
-            "Forest Temple MQ Falling Ceiling Room Chest":            _chest(emu, st, 0x3, 0x6),
-            "Forest Temple MQ Basement Chest":                        _chest(emu, st, 0x3, 0xB),
-            "Forest Temple MQ GS First Hallway":                      _skulltula(emu, 0x3, 0x1),
-            "Forest Temple MQ GS Raised Island Courtyard":            _skulltula(emu, 0x3, 0x0),
-            "Forest Temple MQ GS Level Island Courtyard":             _skulltula(emu, 0x3, 0x2),
-            "Forest Temple MQ GS Well":                               _skulltula(emu, 0x3, 0x3),
-            "Forest Temple MQ GS Block Push Room":                    _skulltula(emu, 0x3, 0x4),
-        })
-    checks["Forest Temple Phantom Ganon Heart"] = _boss_heart(emu, st, 0x14, 0x08)
-    checks["Phantom Ganon"]                     = _boss_reward(st, 0x08)
-    return checks
-
-
-def _hyrule_field(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    hf_scrub = _igi(emu, 0x0, 0x3) or _scrub(emu, 0x10, 0x3)
-    return {
-        "HF Ocarina of Time Item":         _event(emu, 0x4, 0x3),
-        "HF Near Market Grotto Chest":     _chest(emu, st, 0x3E, 0x00),
-        "HF Tektite Grotto Freestanding PoH": _ground(emu, st, 0x3E, 0x01),
-        "HF Southeast Grotto Chest":       _chest(emu, st, 0x3E, 0x02),
-        "HF Open Grotto Chest":            _chest(emu, st, 0x3E, 0x03),
-        "HF Cow Grotto Cow":               _cow(emu, st, 0x3E, 0x19),
-        "HF Deku Scrub Grotto":            hf_scrub,
-        "HF GS Cow Grotto":                _skulltula(emu, 0x0A, 0x0),
-        "HF GS Near Kak Grotto":           _skulltula(emu, 0x0A, 0x1),
-    }
-
-
-def _lon_lon_ranch(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    return {
-        "LLR Talons Chickens":       _igi(emu, 0x1, 0x2),
-        "LLR Freestanding PoH":      _ground(emu, st, 0x4C, 0x01),
-        "LLR Tower Left Cow":        _cow(emu, st, 0x4C, 0x19),
-        "LLR Tower Right Cow":       _cow(emu, st, 0x4C, 0x18),
-        "LLR Deku Scrub Grotto Left":  _scrub(emu, 0x26, 0x1),
-        "LLR Deku Scrub Grotto Center":_scrub(emu, 0x26, 0x4),
-        "LLR Deku Scrub Grotto Right": _scrub(emu, 0x26, 0x6),
-        "LLR Stables Left Cow":      _cow(emu, st, 0x36, 0x18),
-        "LLR Stables Right Cow":     _cow(emu, st, 0x36, 0x19),
-        "LLR GS House Window":       _skulltula(emu, 0x0B, 0x2),
-        "LLR GS Tree":               _skulltula(emu, 0x0B, 0x3),
-        "LLR GS Rain Shed":          _skulltula(emu, 0x0B, 0x1),
-        "LLR GS Back Wall":          _skulltula(emu, 0x0B, 0x0),
-    }
-
-
-def _market(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    return {
-        "Gift from Sages":                  _check_temp_context(st, 0xFF, 0x05, 0x03),
-        "Market Shooting Gallery Reward":      _igi(emu, 0x0, 0x5),
-        "Market Bombchu Bowling First Prize":  _igi(emu, 0x3, 0x1),
-        "Market Bombchu Bowling Second Prize": _igi(emu, 0x3, 0x2),
-        "Market Treasure Chest Game Salesman": _tcg_salesman(emu, st),
-        "Market Treasure Chest Game Room 1 Bottom": _chest(emu, st, 0x10, 0x00),
-        "Market Treasure Chest Game Room 1 Top":    _chest(emu, st, 0x10, 0x01),
-        "Market Treasure Chest Game Room 2 Bottom": _chest(emu, st, 0x10, 0x02),
-        "Market Treasure Chest Game Room 2 Top":    _chest(emu, st, 0x10, 0x03),
-        "Market Treasure Chest Game Room 3 Bottom": _chest(emu, st, 0x10, 0x04),
-        "Market Treasure Chest Game Room 3 Top":    _chest(emu, st, 0x10, 0x05),
-        "Market Treasure Chest Game Room 4 Bottom": _chest(emu, st, 0x10, 0x06),
-        "Market Treasure Chest Game Room 4 Top":    _chest(emu, st, 0x10, 0x07),
-        "Market Treasure Chest Game Room 5 Bottom": _chest(emu, st, 0x10, 0x08),
-        "Market Treasure Chest Game Room 5 Top":    _chest(emu, st, 0x10, 0x09),
-        "Market Treasure Chest Game Reward":   _igi(emu, 0x2, 0x3) or _chest(emu, st, 0x10, 0x0A),
-        "Market Lost Dog":                     _inf(emu, 0x33, 0x1),
-        "Market 10 Big Poes":                  _poe_bottle(emu, st),
-        "ToT Light Arrows Cutscene":           _event(emu, 0xC, 0x4),
-        "ToT Reward from Rauru":               _event(emu, 0x4, 0x5) or _boss_reward(st, 0x04),
-        "Market GS Guard House":               _skulltula(emu, 0x0E, 0x3),
-        "Market Bazaar Item 5":                _shop(emu, 0x4, 0x0),
-        "Market Bazaar Item 6":                _shop(emu, 0x4, 0x1),
-        "Market Bazaar Item 7":                _shop(emu, 0x4, 0x2),
-        "Market Bazaar Item 8":                _shop(emu, 0x4, 0x3),
-        "Market Potion Shop Item 5":           _shop(emu, 0x0, 0x0),
-        "Market Potion Shop Item 6":           _shop(emu, 0x0, 0x1),
-        "Market Potion Shop Item 7":           _shop(emu, 0x0, 0x2),
-        "Market Potion Shop Item 8":           _shop(emu, 0x0, 0x3),
-        "Market Bombchu Shop Item 5":          _shop(emu, 0x1, 0x0),
-        "Market Bombchu Shop Item 6":          _shop(emu, 0x1, 0x1),
-        "Market Bombchu Shop Item 7":          _shop(emu, 0x1, 0x2),
-        "Market Bombchu Shop Item 8":          _shop(emu, 0x1, 0x3),
-        "Market Mask Shop Item 1":             _shop_location(emu, st, "Market Mask Shop Item 1", 0x33, 0x53),
-        "Market Mask Shop Item 2":             _shop_location(emu, st, "Market Mask Shop Item 2", 0x33, 0x52),
-        "Market Mask Shop Item 3":             _shop_location(emu, st, "Market Mask Shop Item 3", 0x33, 0x1C),
-        "Market Mask Shop Item 4":             _shop_location(emu, st, "Market Mask Shop Item 4", 0x33, 0x51),
-        "Market Mask Shop Item 5":             _shop_location(emu, st, "Market Mask Shop Item 5", 0x33, 0x17),
-        "Market Mask Shop Item 6":             _shop_location(emu, st, "Market Mask Shop Item 6", 0x33, 0x1A),
-        "Market Mask Shop Item 7":             _shop_location(emu, st, "Market Mask Shop Item 7", 0x33, 0x1B),
-        "Market Mask Shop Item 8":             _shop_location(emu, st, "Market Mask Shop Item 8", 0x33, 0x18),
-    }
-
-
-def _hyrule_castle(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    return {
-        "HC Malon Egg":          _event(emu, 0x1, 0x2),
-        "HC Zeldas Letter":      _event(emu, 0x4, 0x0),
-        "HC Great Fairy Reward": _igi(emu, 0x2, 0x1),
-        "HC GS Tree":            _skulltula(emu, 0xE, 0x2),
-        "HC GS Storms Grotto":   _skulltula(emu, 0xE, 0x1),
-    }
-
-
-def _kakariko_village(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    return {
-        "Kak Anju as Child":                _igi(emu, 0x0, 0x4),
-        "Kak Anju as Adult":                _igi(emu, 0x4, 0x4),
-        "Kak Anju Trade Pocket Cucco":      _adult_trade(emu, st, 0x52, 0x0E, 12),
-        "Kak Granny Trade Odd Mushroom":    _adult_trade(emu, st, 0x4E, 0x20, 14),
-        "Kak Granny Buy Blue Potion":       _sc(emu, 0x4E, 0x00, 0x10) or _base_item(emu, st, 0x4E, 0x12),
-        "Kak Impas House Freestanding PoH": _ground(emu, st, 0x37, 0x1),
-        "Kak Windmill Freestanding PoH":    _ground(emu, st, 0x48, 0x1),
-        "Kak Man on Roof":                  _igi(emu, 0x3, 0x5),
-        "Kak Open Grotto Chest":            _chest(emu, st, 0x3E, 0x08),
-        "Kak Redead Grotto Chest":          _chest(emu, st, 0x3E, 0x0A),
-        "Kak Shooting Gallery Reward":      _igi(emu, 0x0, 0x6),
-        "Kak 10 Gold Skulltula Reward":     _event(emu, 0xD, 0xA),
-        "Kak 20 Gold Skulltula Reward":     _event(emu, 0xD, 0xB),
-        "Kak 30 Gold Skulltula Reward":     _event(emu, 0xD, 0xC),
-        "Kak 40 Gold Skulltula Reward":     _event(emu, 0xD, 0xD),
-        "Kak 50 Gold Skulltula Reward":     _event(emu, 0xD, 0xE),
-        "Kak 100 Gold Skulltula Reward":    _base_item(emu, st, 0x50, 0x56),
-        "Kak Impas House Cow":              _cow(emu, st, 0x37, 0x18),
-        "Kak GS Tree":                      _skulltula(emu, 0x10, 0x5),
-        "Kak GS Near Gate Guard":           _skulltula(emu, 0x10, 0x1),
-        "Kak GS Watchtower":                _skulltula(emu, 0x10, 0x2),
-        "Kak GS Skulltula House":           _skulltula(emu, 0x10, 0x4),
-        "Kak GS House Under Construction":  _skulltula(emu, 0x10, 0x3),
-        "Kak GS Above Impas House":         _skulltula(emu, 0x10, 0x6),
-        "Kak Bazaar Item 5":                _shop(emu, 0x7, 0x0),
-        "Kak Bazaar Item 6":                _shop(emu, 0x7, 0x1),
-        "Kak Bazaar Item 7":                _shop(emu, 0x7, 0x2),
-        "Kak Bazaar Item 8":                _shop(emu, 0x7, 0x3),
-        "Kak Potion Shop Item 5":           _shop(emu, 0x3, 0x0),
-        "Kak Potion Shop Item 6":           _shop(emu, 0x3, 0x1),
-        "Kak Potion Shop Item 7":           _shop(emu, 0x3, 0x2),
-        "Kak Potion Shop Item 8":           _shop(emu, 0x3, 0x3),
-    }
-
-
-def _graveyard(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    return {
-        "Graveyard Shield Grave Chest":         _chest(emu, st, 0x40, 0x00),
-        "Graveyard Heart Piece Grave Chest":    _chest(emu, st, 0x3F, 0x00),
-        "Graveyard Royal Familys Tomb Chest":   _chest(emu, st, 0x41, 0x00),
-        "Graveyard Freestanding PoH":           _ground(emu, st, 0x53, 0x4),
-        "Graveyard Dampe Gravedigging Tour":    _ground(emu, st, 0x53, 0x8),
-        "Graveyard Dampe Race Hookshot Chest":  _chest(emu, st, 0x48, 0x00),
-        "Graveyard Dampe Race Freestanding PoH":_ground(emu, st, 0x48, 0x7),
-        "Graveyard GS Bean Patch":              _skulltula(emu, 0x10, 0x0),
-        "Graveyard GS Wall":                    _skulltula(emu, 0x10, 0x7),
-    }
-
-
-def _bottom_of_well(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    checks = {}
-    if not _is_mq(emu, st, 0x8):
-        checks.update({
-            "Bottom of the Well Front Left Fake Wall Chest":   _chest(emu, st, 0x08, 0x08),
-            "Bottom of the Well Front Center Bombable Chest":  _chest(emu, st, 0x08, 0x02),
-            "Bottom of the Well Back Left Bombable Chest":     _chest(emu, st, 0x08, 0x04),
-            "Bottom of the Well Underwater Left Chest":        _chest(emu, st, 0x08, 0x09),
-            "Bottom of the Well Freestanding Key":             _ground(emu, st, 0x08, 0x01),
-            "Bottom of the Well Compass Chest":                _chest(emu, st, 0x08, 0x01),
-            "Bottom of the Well Center Skulltula Chest":       _chest(emu, st, 0x08, 0x0E),
-            "Bottom of the Well Right Bottom Fake Wall Chest": _chest(emu, st, 0x08, 0x05),
-            "Bottom of the Well Fire Keese Chest":             _chest(emu, st, 0x08, 0x0A),
-            "Bottom of the Well Like Like Chest":              _chest(emu, st, 0x08, 0x0C),
-            "Bottom of the Well Map Chest":                    _chest(emu, st, 0x08, 0x07),
-            "Bottom of the Well Underwater Front Chest":       _chest(emu, st, 0x08, 0x10),
-            "Bottom of the Well Invisible Chest":              _chest(emu, st, 0x08, 0x14),
-            "Bottom of the Well Lens of Truth Chest":          _chest(emu, st, 0x08, 0x03),
-            "Bottom of the Well GS West Inner Room":           _skulltula(emu, 0x08, 0x2),
-            "Bottom of the Well GS East Inner Room":           _skulltula(emu, 0x08, 0x1),
-            "Bottom of the Well GS Like Like Cage":            _skulltula(emu, 0x08, 0x0),
-        })
-    else:
-        checks.update({
-            "Bottom of the Well MQ Map Chest":                    _chest(emu, st, 0x8, 0x3),
-            "Bottom of the Well MQ East Inner Room Freestanding Key": _ground(emu, st, 0x8, 0x1),
-            "Bottom of the Well MQ Compass Chest":                _chest(emu, st, 0x8, 0x2),
-            "Bottom of the Well MQ Dead Hand Freestanding Key":   _ground(emu, st, 0x8, 0x2),
-            "Bottom of the Well MQ Lens of Truth Chest":          _chest(emu, st, 0x8, 0x1),
-            "Bottom of the Well MQ GS Coffin Room":               _skulltula(emu, 0x08, 0x2),
-            "Bottom of the Well MQ GS West Inner Room":           _skulltula(emu, 0x08, 0x1),
-            "Bottom of the Well MQ GS Basement":                  _skulltula(emu, 0x08, 0x0),
-        })
-    return checks
-
-
-def _shadow_temple(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    checks = {}
-    if not _is_mq(emu, st, 0x7):
-        checks.update({
-            "Shadow Temple Map Chest":                    _chest(emu, st, 0x07, 0x01),
-            "Shadow Temple Hover Boots Chest":            _chest(emu, st, 0x07, 0x07),
-            "Shadow Temple Compass Chest":                _chest(emu, st, 0x07, 0x03),
-            "Shadow Temple Early Silver Rupee Chest":     _chest(emu, st, 0x07, 0x02),
-            "Shadow Temple Invisible Blades Visible Chest":  _chest(emu, st, 0x07, 0x0C),
-            "Shadow Temple Invisible Blades Invisible Chest":_chest(emu, st, 0x07, 0x16),
-            "Shadow Temple Falling Spikes Lower Chest":   _chest(emu, st, 0x07, 0x05),
-            "Shadow Temple Falling Spikes Upper Chest":   _chest(emu, st, 0x07, 0x06),
-            "Shadow Temple Falling Spikes Switch Chest":  _chest(emu, st, 0x07, 0x04),
-            "Shadow Temple Invisible Spikes Chest":       _chest(emu, st, 0x07, 0x09),
-            "Shadow Temple Freestanding Key":             _ground(emu, st, 0x07, 0x01),
-            "Shadow Temple Wind Hint Chest":              _chest(emu, st, 0x07, 0x15),
-            "Shadow Temple After Wind Enemy Chest":       _chest(emu, st, 0x07, 0x08),
-            "Shadow Temple After Wind Hidden Chest":      _chest(emu, st, 0x07, 0x14),
-            "Shadow Temple Spike Walls Left Chest":       _chest(emu, st, 0x07, 0x0A),
-            "Shadow Temple Boss Key Chest":               _chest(emu, st, 0x07, 0x0B),
-            "Shadow Temple Invisible Floormaster Chest":  _chest(emu, st, 0x07, 0x0D),
-            "Shadow Temple GS Invisible Blades Room":     _skulltula(emu, 0x07, 0x3),
-            "Shadow Temple GS Falling Spikes Room":       _skulltula(emu, 0x07, 0x1),
-            "Shadow Temple GS Single Giant Pot":          _skulltula(emu, 0x07, 0x0),
-            "Shadow Temple GS Near Ship":                 _skulltula(emu, 0x07, 0x4),
-            "Shadow Temple GS Triple Giant Pot":          _skulltula(emu, 0x07, 0x2),
-        })
-    else:
-        checks.update({
-            "Shadow Temple MQ Early Gibdos Chest":              _chest(emu, st, 0x7, 0x3),
-            "Shadow Temple MQ Map Chest":                       _chest(emu, st, 0x7, 0x2),
-            "Shadow Temple MQ Near Ship Invisible Chest":       _chest(emu, st, 0x7, 0xE),
-            "Shadow Temple MQ Compass Chest":                   _chest(emu, st, 0x7, 0x1),
-            "Shadow Temple MQ Hover Boots Chest":               _chest(emu, st, 0x7, 0x7),
-            "Shadow Temple MQ Invisible Blades Invisible Chest":_chest(emu, st, 0x7, 0x16),
-            "Shadow Temple MQ Invisible Blades Visible Chest":  _chest(emu, st, 0x7, 0xC),
-            "Shadow Temple MQ Beamos Silver Rupees Chest":      _chest(emu, st, 0x7, 0xF),
-            "Shadow Temple MQ Falling Spikes Lower Chest":      _chest(emu, st, 0x7, 0x5),
-            "Shadow Temple MQ Falling Spikes Upper Chest":      _chest(emu, st, 0x7, 0x6),
-            "Shadow Temple MQ Falling Spikes Switch Chest":     _chest(emu, st, 0x7, 0x4),
-            "Shadow Temple MQ Invisible Spikes Chest":          _chest(emu, st, 0x7, 0x9),
-            "Shadow Temple MQ Stalfos Room Chest":              _chest(emu, st, 0x7, 0x10),
-            "Shadow Temple MQ Wind Hint Chest":                 _chest(emu, st, 0x7, 0x15),
-            "Shadow Temple MQ After Wind Hidden Chest":         _chest(emu, st, 0x7, 0x14),
-            "Shadow Temple MQ After Wind Enemy Chest":          _chest(emu, st, 0x7, 0x8),
-            "Shadow Temple MQ Boss Key Chest":                  _chest(emu, st, 0x7, 0xB),
-            "Shadow Temple MQ Spike Walls Left Chest":          _chest(emu, st, 0x7, 0xA),
-            "Shadow Temple MQ Freestanding Key":                _ground(emu, st, 0x7, 0x6),
-            "Shadow Temple MQ Bomb Flower Chest":               _chest(emu, st, 0x7, 0xD),
-            "Shadow Temple MQ GS Falling Spikes Room":          _skulltula(emu, 0x7, 0x1),
-            "Shadow Temple MQ GS Wind Hint Room":               _skulltula(emu, 0x7, 0x0),
-            "Shadow Temple MQ GS After Wind":                   _skulltula(emu, 0x7, 0x3),
-            "Shadow Temple MQ GS After Ship":                   _skulltula(emu, 0x7, 0x4),
-            "Shadow Temple MQ GS Near Boss":                    _skulltula(emu, 0x7, 0x2),
-        })
-    checks["Shadow Temple Bongo Bongo Heart"] = _boss_heart(emu, st, 0x18, 0x0C)
-    checks["Bongo Bongo"]                     = _boss_reward(st, 0x0C)
-    return checks
-
-
-def _death_mountain_trail(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    dmt_fairy = _fairy(emu, st, 0x3B, 0x18) or _check_temp_context(st, 0xFF, 0x05, 0x13)
-    return {
-        "DMT Freestanding PoH":       _ground(emu, st, 0x60, 0x1E),
-        "DMT Chest":                  _chest(emu, st, 0x60, 0x01),
-        "DMT Storms Grotto Chest":    _chest(emu, st, 0x3E, 0x17),
-        "DMT Great Fairy Reward":     dmt_fairy,
-        "DMT Biggoron":               _bgs(emu) or _adult_trade(emu, st, 0x60, 0x57, 21),
-        "DMT Trade Broken Sword":     _adult_trade(emu, st, 0x60, 0x23, 17),
-        "DMT Trade Eyedrops":         _adult_trade(emu, st, 0x60, 0x26, 20),
-        "DMT Cow Grotto Cow":         _cow(emu, st, 0x3E, 0x18),
-        "DMT GS Near Kak":            _skulltula(emu, 0x0F, 0x2),
-        "DMT GS Bean Patch":          _skulltula(emu, 0x0F, 0x1),
-        "DMT GS Above Dodongos Cavern":_skulltula(emu, 0x0F, 0x3),
-        "DMT GS Falling Rocks Path":  _skulltula(emu, 0x0F, 0x4),
-    }
-
-
-def _goron_city(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    return {
-        "GC Darunias Joy":            _event(emu, 0x3, 0x6),
-        "GC Pot Freestanding PoH":    _ground(emu, st, 0x62, 0x1F),
-        "GC Rolling Goron as Child":  _inf(emu, 0x22, 0x6),
-        "GC Rolling Goron as Adult":  _inf(emu, 0x20, 0x1),
-        "GC Medigoron":               _medigoron(emu, st, 0x62, 0x1),
-        "GC Maze Left Chest":         _chest(emu, st, 0x62, 0x00),
-        "GC Maze Right Chest":        _chest(emu, st, 0x62, 0x01),
-        "GC Maze Center Chest":       _chest(emu, st, 0x62, 0x02),
-        "GC Deku Scrub Grotto Left":  _scrub(emu, 0x25, 0x1),
-        "GC Deku Scrub Grotto Center":_scrub(emu, 0x25, 0x4),
-        "GC Deku Scrub Grotto Right": _scrub(emu, 0x25, 0x6),
-        "GC GS Center Platform":      _skulltula(emu, 0x0F, 0x5),
-        "GC GS Boulder Maze":         _skulltula(emu, 0x0F, 0x6),
-        "GC Shop Item 5":             _shop(emu, 0x5, 0x0),
-        "GC Shop Item 6":             _shop(emu, 0x5, 0x1),
-        "GC Shop Item 7":             _shop(emu, 0x5, 0x2),
-        "GC Shop Item 8":             _shop(emu, 0x5, 0x3),
-    }
-
-
-def _death_mountain_crater(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    dmc_fairy = _fairy(emu, st, 0x3B, 0x10) or _check_temp_context(st, 0xFF, 0x05, 0x14)
-    return {
-        "DMC Volcano Freestanding PoH":    _ground(emu, st, 0x61, 0x08),
-        "DMC Wall Freestanding PoH":       _ground(emu, st, 0x61, 0x02),
-        "DMC Upper Grotto Chest":          _chest(emu, st, 0x3E, 0x1A),
-        "DMC Great Fairy Reward":          dmc_fairy,
-        "DMC Deku Scrub":                  _scrub(emu, 0x61, 0x6),
-        "DMC Deku Scrub Grotto Left":      _scrub(emu, 0x23, 0x1),
-        "DMC Deku Scrub Grotto Center":    _scrub(emu, 0x23, 0x4),
-        "DMC Deku Scrub Grotto Right":     _scrub(emu, 0x23, 0x6),
-        "DMC GS Crate":                    _skulltula(emu, 0x0F, 0x7),
-        "DMC GS Bean Patch":               _skulltula(emu, 0x0F, 0x0),
-    }
-
-
-def _dodongos_cavern(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    checks = {}
-    if not _is_mq(emu, st, 0x1):
-        checks.update({
-            "Dodongos Cavern Map Chest":                        _chest(emu, st, 0x01, 0x8),
-            "Dodongos Cavern Compass Chest":                    _chest(emu, st, 0x01, 0x5),
-            "Dodongos Cavern Bomb Flower Platform Chest":       _chest(emu, st, 0x01, 0x6),
-            "Dodongos Cavern Bomb Bag Chest":                   _chest(emu, st, 0x01, 0x4),
-            "Dodongos Cavern End of Bridge Chest":              _chest(emu, st, 0x01, 0xA),
-            "Dodongos Cavern Deku Scrub Lobby":                 _scrub(emu, 0x1, 0x5),
-            "Dodongos Cavern Deku Scrub Side Room Near Dodongos":_scrub(emu, 0x1, 0x2),
-            "Dodongos Cavern Deku Scrub Near Bomb Bag Left":    _scrub(emu, 0x1, 0x1),
-            "Dodongos Cavern Deku Scrub Near Bomb Bag Right":   _scrub(emu, 0x1, 0x4),
-            "Dodongos Cavern GS Side Room Near Lower Lizalfos": _skulltula(emu, 0x01, 0x4),
-            "Dodongos Cavern GS Scarecrow":                     _skulltula(emu, 0x01, 0x1),
-            "Dodongos Cavern GS Alcove Above Stairs":           _skulltula(emu, 0x01, 0x2),
-            "Dodongos Cavern GS Vines Above Stairs":            _skulltula(emu, 0x01, 0x0),
-            "Dodongos Cavern GS Back Room":                     _skulltula(emu, 0x01, 0x3),
-        })
-    else:
-        checks.update({
-            "Dodongos Cavern MQ Map Chest":                              _chest(emu, st, 0x1, 0x0),
-            "Dodongos Cavern MQ Bomb Bag Chest":                         _chest(emu, st, 0x1, 0x4),
-            "Dodongos Cavern MQ Torch Puzzle Room Chest":                _chest(emu, st, 0x1, 0x3),
-            "Dodongos Cavern MQ Larvae Room Chest":                      _chest(emu, st, 0x1, 0x2),
-            "Dodongos Cavern MQ Compass Chest":                          _chest(emu, st, 0x1, 0x5),
-            "Dodongos Cavern MQ Under Grave Chest":                      _chest(emu, st, 0x1, 0x1),
-            "Dodongos Cavern MQ Deku Scrub Lobby Front":                 _scrub(emu, 0x1, 0x4),
-            "Dodongos Cavern MQ Deku Scrub Lobby Rear":                  _scrub(emu, 0x1, 0x2),
-            "Dodongos Cavern MQ Deku Scrub Side Room Near Lower Lizalfos":_scrub(emu, 0x1, 0x8),
-            "Dodongos Cavern MQ Deku Scrub Staircase":                   _scrub(emu, 0x1, 0x5),
-            "Dodongos Cavern MQ GS Scrub Room":                          _skulltula(emu, 0x1, 0x1),
-            "Dodongos Cavern MQ GS Larvae Room":                         _skulltula(emu, 0x1, 0x4),
-            "Dodongos Cavern MQ GS Lizalfos Room":                       _skulltula(emu, 0x1, 0x2),
-            "Dodongos Cavern MQ GS Song of Time Block Room":             _skulltula(emu, 0x1, 0x3),
-            "Dodongos Cavern MQ GS Back Area":                           _skulltula(emu, 0x1, 0x0),
-        })
-    checks["Dodongos Cavern Boss Room Chest"]       = _chest(emu, st, 0x12, 0x0)
-    checks["Dodongos Cavern King Dodongo Heart"]    = _boss_heart(emu, st, 0x12, 0x06)
-    checks["King Dodongo"]                          = _boss_reward(st, 0x06)
-    return checks
-
-
-def _fire_temple(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    checks = {}
-    if not _is_mq(emu, st, 0x4):
-        checks.update({
-            "Fire Temple Near Boss Chest":                 _chest(emu, st, 0x04, 0x01),
-            "Fire Temple Flare Dancer Chest":              _chest(emu, st, 0x04, 0x00),
-            "Fire Temple Boss Key Chest":                  _chest(emu, st, 0x04, 0x0C),
-            "Fire Temple Big Lava Room Lower Open Door Chest": _chest(emu, st, 0x04, 0x04),
-            "Fire Temple Big Lava Room Blocked Door Chest":_chest(emu, st, 0x04, 0x02),
-            "Fire Temple Boulder Maze Lower Chest":        _chest(emu, st, 0x04, 0x03),
-            "Fire Temple Boulder Maze Side Room Chest":    _chest(emu, st, 0x04, 0x08),
-            "Fire Temple Map Chest":                       _chest(emu, st, 0x04, 0x0A),
-            "Fire Temple Boulder Maze Shortcut Chest":     _chest(emu, st, 0x04, 0x0B),
-            "Fire Temple Boulder Maze Upper Chest":        _chest(emu, st, 0x04, 0x06),
-            "Fire Temple Scarecrow Chest":                 _chest(emu, st, 0x04, 0x0D),
-            "Fire Temple Compass Chest":                   _chest(emu, st, 0x04, 0x07),
-            "Fire Temple Megaton Hammer Chest":            _chest(emu, st, 0x04, 0x05),
-            "Fire Temple Highest Goron Chest":             _chest(emu, st, 0x04, 0x09),
-            "Fire Temple GS Boss Key Loop":                _skulltula(emu, 0x04, 0x1),
-            "Fire Temple GS Song of Time Room":            _skulltula(emu, 0x04, 0x0),
-            "Fire Temple GS Boulder Maze":                 _skulltula(emu, 0x04, 0x2),
-            "Fire Temple GS Scarecrow Climb":              _skulltula(emu, 0x04, 0x4),
-            "Fire Temple GS Scarecrow Top":                _skulltula(emu, 0x04, 0x3),
-        })
-    else:
-        checks.update({
-            "Fire Temple MQ Map Room Side Chest":                _chest(emu, st, 0x4, 0x2),
-            "Fire Temple MQ Megaton Hammer Chest":               _chest(emu, st, 0x4, 0x0),
-            "Fire Temple MQ Map Chest":                          _chest(emu, st, 0x4, 0xC),
-            "Fire Temple MQ Near Boss Chest":                    _chest(emu, st, 0x4, 0x7),
-            "Fire Temple MQ Big Lava Room Blocked Door Chest":   _chest(emu, st, 0x4, 0x1),
-            "Fire Temple MQ Boss Key Chest":                     _chest(emu, st, 0x4, 0x4),
-            "Fire Temple MQ Lizalfos Maze Side Room Chest":      _chest(emu, st, 0x4, 0x8),
-            "Fire Temple MQ Compass Chest":                      _chest(emu, st, 0x4, 0xB),
-            "Fire Temple MQ Lizalfos Maze Upper Chest":          _chest(emu, st, 0x4, 0x6),
-            "Fire Temple MQ Lizalfos Maze Lower Chest":          _chest(emu, st, 0x4, 0x3),
-            "Fire Temple MQ Freestanding Key":                   _ground(emu, st, 0x4, 0x1C),
-            "Fire Temple MQ Chest On Fire":                      _chest(emu, st, 0x4, 0x5),
-            "Fire Temple MQ GS Big Lava Room Open Door":         _skulltula(emu, 0x4, 0x0),
-            "Fire Temple MQ GS Skull On Fire":                   _skulltula(emu, 0x4, 0x2),
-            "Fire Temple MQ GS Flame Maze Center":               _skulltula(emu, 0x4, 0x3),
-            "Fire Temple MQ GS Flame Maze Side Room":            _skulltula(emu, 0x4, 0x4),
-            "Fire Temple MQ GS Above Flame Maze":                _skulltula(emu, 0x4, 0x1),
-        })
-    checks["Fire Temple Volvagia Heart"] = _boss_heart(emu, st, 0x15, 0x09)
-    checks["Volvagia"]                   = _boss_reward(st, 0x09)
-    return checks
-
-
-def _zoras_river(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    return {
-        "ZR Magic Bean Salesman":          _bean(emu, st, 0x54, 0x1),
-        "ZR Open Grotto Chest":            _chest(emu, st, 0x3E, 0x09),
-        "ZR Frogs in the Rain":            _event(emu, 0xD, 0x6),
-        "ZR Frogs Ocarina Game":           _event(emu, 0xD, 0x0),
-        "ZR Near Open Grotto Freestanding PoH": _ground(emu, st, 0x54, 0x04),
-        "ZR Near Domain Freestanding PoH": _ground(emu, st, 0x54, 0x0B),
-        "ZR Deku Scrub Grotto Front":      _scrub(emu, 0x15, 0x9),
-        "ZR Deku Scrub Grotto Rear":       _scrub(emu, 0x15, 0x8),
-        "ZR Frogs Zeldas Lullaby":         _event(emu, 0xD, 0x1),
-        "ZR Frogs Eponas Song":            _event(emu, 0xD, 0x2),
-        "ZR Frogs Suns Song":              _event(emu, 0xD, 0x3),
-        "ZR Frogs Sarias Song":            _event(emu, 0xD, 0x4),
-        "ZR Frogs Song of Time":           _event(emu, 0xD, 0x5),
-        "ZR GS Tree":                      _skulltula(emu, 0x11, 0x1),
-        "ZR GS Ladder":                    _skulltula(emu, 0x11, 0x0),
-        "ZR GS Near Raised Grottos":       _skulltula(emu, 0x11, 0x4),
-        "ZR GS Above Bridge":              _skulltula(emu, 0x11, 0x3),
-    }
-
-
-def _zoras_domain(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    return {
-        "ZD Diving Minigame": _event(emu, 0x3, 0x8),
-        "ZD Chest":           _chest(emu, st, 0x58, 0x00),
-        "ZD King Zora Thawed":_inf(emu, 0x26, 0x1),
-        "ZD Trade Prescription": _adult_trade(emu, st, 0x58, 0x24, 18),
-        "ZD GS Frozen Waterfall":_skulltula(emu, 0x11, 0x6),
-        "ZD Shop Item 5":     _shop(emu, 0x2, 0x0),
-        "ZD Shop Item 6":     _shop(emu, 0x2, 0x1),
-        "ZD Shop Item 7":     _shop(emu, 0x2, 0x2),
-        "ZD Shop Item 8":     _shop(emu, 0x2, 0x3),
-    }
-
-
-def _zoras_fountain(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    return {
-        "ZF Great Fairy Reward":         _igi(emu, 0x2, 0x0),
-        "ZF Iceberg Freestanding PoH":   _ground(emu, st, 0x59, 0x01),
-        "ZF Bottom Freestanding PoH":    _ground(emu, st, 0x59, 0x14),
-        "ZF GS Above the Log":           _skulltula(emu, 0x11, 0x2),
-        "ZF GS Tree":                    _skulltula(emu, 0x11, 0x7),
-        "ZF GS Hidden Cave":             _skulltula(emu, 0x11, 0x5),
-    }
-
-
-def _jabu(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    checks = {}
-    if not _is_mq(emu, st, 0x2):
-        checks.update({
-            "Jabu Jabus Belly Boomerang Chest":        _chest(emu, st, 0x02, 0x01),
-            "Jabu Jabus Belly Map Chest":              _chest(emu, st, 0x02, 0x02),
-            "Jabu Jabus Belly Compass Chest":          _chest(emu, st, 0x02, 0x04),
-            "Jabu Jabus Belly Deku Scrub":             _scrub(emu, 0x02, 0x1),
-            "Jabu Jabus Belly GS Water Switch Room":   _skulltula(emu, 0x02, 0x3),
-            "Jabu Jabus Belly GS Lobby Basement Lower":_skulltula(emu, 0x02, 0x0),
-            "Jabu Jabus Belly GS Lobby Basement Upper":_skulltula(emu, 0x02, 0x1),
-            "Jabu Jabus Belly GS Near Boss":           _skulltula(emu, 0x02, 0x2),
-        })
-    else:
-        checks.update({
-            "Jabu Jabus Belly MQ Map Chest":                _chest(emu, st, 0x2, 0x3),
-            "Jabu Jabus Belly MQ First Room Side Chest":    _chest(emu, st, 0x2, 0x5),
-            "Jabu Jabus Belly MQ Second Room Lower Chest":  _chest(emu, st, 0x2, 0x2),
-            "Jabu Jabus Belly MQ Compass Chest":            _chest(emu, st, 0x2, 0x0),
-            "Jabu Jabus Belly MQ Basement Near Switches Chest": _chest(emu, st, 0x2, 0x8),
-            "Jabu Jabus Belly MQ Basement Near Vines Chest":    _chest(emu, st, 0x2, 0x4),
-            "Jabu Jabus Belly MQ Boomerang Room Small Chest":   _chest(emu, st, 0x2, 0x1),
-            "Jabu Jabus Belly MQ Boomerang Chest":          _chest(emu, st, 0x2, 0x6),
-            "Jabu Jabus Belly MQ Falling Like Like Room Chest": _chest(emu, st, 0x2, 0x9),
-            "Jabu Jabus Belly MQ Second Room Upper Chest":  _chest(emu, st, 0x2, 0x7),
-            "Jabu Jabus Belly MQ Near Boss Chest":          _chest(emu, st, 0x2, 0xA),
-            "Jabu Jabus Belly MQ Cow":                      _cow(emu, st, 0x2, 0x18),
-            "Jabu Jabus Belly MQ GS Boomerang Chest Room":  _skulltula(emu, 0x2, 0x0),
-            "Jabu Jabus Belly MQ GS Tailpasaran Room":      _skulltula(emu, 0x2, 0x2),
-            "Jabu Jabus Belly MQ GS Invisible Enemies Room":_skulltula(emu, 0x2, 0x3),
-            "Jabu Jabus Belly MQ GS Near Boss":             _skulltula(emu, 0x2, 0x1),
-        })
-    checks["Jabu Jabus Belly Barinade Heart"] = _boss_heart(emu, st, 0x13, 0x07)
-    checks["Barinade"]                        = _boss_reward(st, 0x07)
-    return checks
-
-
-def _ice_cavern(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    checks = {}
-    if not _is_mq(emu, st, 0x9):
-        checks.update({
-            "Ice Cavern Map Chest":              _chest(emu, st, 0x09, 0x00),
-            "Ice Cavern Compass Chest":          _chest(emu, st, 0x09, 0x01),
-            "Ice Cavern Freestanding PoH":       _ground(emu, st, 0x09, 0x01),
-            "Ice Cavern Iron Boots Chest":       _chest(emu, st, 0x09, 0x02),
-            "Ice Cavern GS Spinning Scythe Room":_skulltula(emu, 0x09, 0x1),
-            "Ice Cavern GS Heart Piece Room":    _skulltula(emu, 0x09, 0x2),
-            "Ice Cavern GS Push Block Room":     _skulltula(emu, 0x09, 0x0),
-        })
-    else:
-        checks.update({
-            "Ice Cavern MQ Map Chest":       _chest(emu, st, 0x09, 0x01),
-            "Ice Cavern MQ Compass Chest":   _chest(emu, st, 0x09, 0x00),
-            "Ice Cavern MQ Freestanding PoH":_ground(emu, st, 0x09, 0x01),
-            "Ice Cavern MQ Iron Boots Chest":_chest(emu, st, 0x09, 0x02),
-            "Ice Cavern MQ GS Red Ice":      _skulltula(emu, 0x09, 0x1),
-            "Ice Cavern MQ GS Ice Block":    _skulltula(emu, 0x09, 0x2),
-            "Ice Cavern MQ GS Scarecrow":    _skulltula(emu, 0x09, 0x0),
-        })
-    return checks
-
-
-def _lake_hylia(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    return {
-        "LH Underwater Item":           _event(emu, 0x3, 0x1),
-        "LH Child Fishing":             _fishing(emu, False),
-        "LH Adult Fishing":             _fishing(emu, True),
-        "LH Loach Fishing":             _loach_fishing(emu),
-        "LH Lab Dive":                  _igi(emu, 0x3, 0x0),
-        "LH Freestanding PoH":          _ground(emu, st, 0x57, 0x1E),
-        "LH Trade Eyeball Frog":        _adult_trade(emu, st, 0x38, 0x25, 19),
-        "LH Sun":                       _fire_arrows(emu, st, 0x57, 0x0),
-        "LH Deku Scrub Grotto Left":    _scrub(emu, 0x19, 0x1),
-        "LH Deku Scrub Grotto Center":  _scrub(emu, 0x19, 0x4),
-        "LH Deku Scrub Grotto Right":   _scrub(emu, 0x19, 0x6),
-        "LH GS Lab Wall":               _skulltula(emu, 0x12, 0x2),
-        "LH GS Bean Patch":             _skulltula(emu, 0x12, 0x0),
-        "LH GS Small Island":           _skulltula(emu, 0x12, 0x1),
-        "LH GS Lab Crate":              _skulltula(emu, 0x12, 0x3),
-        "LH GS Tree":                   _skulltula(emu, 0x12, 0x4),
-    }
-
-
-def _water_temple(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    checks = {}
-    if not _is_mq(emu, st, 0x5):
-        checks.update({
-            "Water Temple Compass Chest":              _chest(emu, st, 0x05, 0x09),
-            "Water Temple Map Chest":                  _chest(emu, st, 0x05, 0x02),
-            "Water Temple Cracked Wall Chest":         _chest(emu, st, 0x05, 0x00),
-            "Water Temple Torches Chest":              _chest(emu, st, 0x05, 0x01),
-            "Water Temple Boss Key Chest":             _chest(emu, st, 0x05, 0x05),
-            "Water Temple Central Pillar Chest":       _chest(emu, st, 0x05, 0x06),
-            "Water Temple Central Bow Target Chest":   _chest(emu, st, 0x05, 0x08),
-            "Water Temple Longshot Chest":             _chest(emu, st, 0x05, 0x07),
-            "Water Temple River Chest":                _chest(emu, st, 0x05, 0x03),
-            "Water Temple Dragon Chest":               _chest(emu, st, 0x05, 0x0A),
-            "Water Temple GS Behind Gate":             _skulltula(emu, 0x05, 0x0),
-            "Water Temple GS Near Boss Key Chest":     _skulltula(emu, 0x05, 0x3),
-            "Water Temple GS Central Pillar":          _skulltula(emu, 0x05, 0x2),
-            "Water Temple GS Falling Platform Room":   _skulltula(emu, 0x05, 0x1),
-            "Water Temple GS River":                   _skulltula(emu, 0x05, 0x4),
-        })
-    else:
-        checks.update({
-            "Water Temple MQ Longshot Chest":              _chest(emu, st, 0x5, 0x0),
-            "Water Temple MQ Map Chest":                   _chest(emu, st, 0x5, 0x2),
-            "Water Temple MQ Compass Chest":               _chest(emu, st, 0x5, 0x1),
-            "Water Temple MQ Central Pillar Chest":        _chest(emu, st, 0x5, 0x6),
-            "Water Temple MQ Boss Key Chest":              _chest(emu, st, 0x5, 0x5),
-            "Water Temple MQ Freestanding Key":            _ground(emu, st, 0x5, 0x1),
-            "Water Temple MQ GS Lizalfos Hallway":         _skulltula(emu, 0x5, 0x0),
-            "Water Temple MQ GS Before Upper Water Switch":_skulltula(emu, 0x5, 0x2),
-            "Water Temple MQ GS River":                    _skulltula(emu, 0x5, 0x1),
-            "Water Temple MQ GS Freestanding Key Area":    _skulltula(emu, 0x5, 0x3),
-            "Water Temple MQ GS Triple Wall Torch":        _skulltula(emu, 0x5, 0x4),
-        })
-    checks["Water Temple Morpha Heart"] = _boss_heart(emu, st, 0x16, 0x0A)
-    checks["Morpha"]                    = _boss_reward(st, 0x0A)
-    return checks
-
-
-def _gerudo_valley(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    return {
-        "GV Crate Freestanding PoH":     _ground(emu, st, 0x5A, 0x2),
-        "GV Waterfall Freestanding PoH": _ground(emu, st, 0x5A, 0x1),
-        "GV Chest":                      _chest(emu, st, 0x5A, 0x00),
-        "GV Deku Scrub Grotto Front":    _scrub(emu, 0x1A, 0x9),
-        "GV Deku Scrub Grotto Rear":     _scrub(emu, 0x1A, 0x8),
-        "GV Trade Poachers Saw":         _adult_trade(emu, st, 0x5A, 0x22, 16),
-        "GV Cow":                        _cow(emu, st, 0x5A, 0x18),
-        "GV GS Small Bridge":            _skulltula(emu, 0x13, 0x1),
-        "GV GS Bean Patch":              _skulltula(emu, 0x13, 0x0),
-        "GV GS Behind Tent":             _skulltula(emu, 0x13, 0x3),
-        "GV GS Pillar":                  _skulltula(emu, 0x13, 0x2),
-    }
-
-
-def _gerudo_fortress(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    return {
-        "Hideout 1 Torch Jail Gerudo Key": _ground(emu, st, 0xC, 0xC),
-        "Hideout 2 Torches Jail Gerudo Key":_ground(emu, st, 0xC, 0xF),
-        "Hideout 3 Torches Jail Gerudo Key":_ground(emu, st, 0xC, 0xA),
-        "Hideout 4 Torches Jail Gerudo Key":_ground(emu, st, 0xC, 0xE),
-        "Hideout Gerudo Membership Card":  _membership(emu),
-        "GF Chest":                        _chest(emu, st, 0x5D, 0x0),
-        "GF Freestanding PoH":             _ground(emu, st, 0x5D, 0x1),
-        "GF HBA 1000 Points":              _inf(emu, 0x33, 0x0),
-        "GF HBA 1500 Points":              _igi(emu, 0x0, 0x7),
-        "GF GS Top Floor":                 _skulltula(emu, 0x14, 0x1),
-        "GF GS Archery Range":             _skulltula(emu, 0x14, 0x0),
-    }
-
-
-def _gerudo_training_ground(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    checks = {}
-    if not _is_mq(emu, st, 0xB):
-        checks.update({
-            "Gerudo Training Ground Lobby Left Chest":          _chest(emu, st, 0x0B, 0x13),
-            "Gerudo Training Ground Lobby Right Chest":         _chest(emu, st, 0x0B, 0x07),
-            "Gerudo Training Ground Stalfos Chest":             _chest(emu, st, 0x0B, 0x00),
-            "Gerudo Training Ground Before Heavy Block Chest":  _chest(emu, st, 0x0B, 0x11),
-            "Gerudo Training Ground Heavy Block First Chest":   _chest(emu, st, 0x0B, 0x0F),
-            "Gerudo Training Ground Heavy Block Second Chest":  _chest(emu, st, 0x0B, 0x0E),
-            "Gerudo Training Ground Heavy Block Third Chest":   _chest(emu, st, 0x0B, 0x14),
-            "Gerudo Training Ground Heavy Block Fourth Chest":  _chest(emu, st, 0x0B, 0x02),
-            "Gerudo Training Ground Eye Statue Chest":          _chest(emu, st, 0x0B, 0x03),
-            "Gerudo Training Ground Near Scarecrow Chest":      _chest(emu, st, 0x0B, 0x04),
-            "Gerudo Training Ground Hammer Room Clear Chest":   _chest(emu, st, 0x0B, 0x12),
-            "Gerudo Training Ground Hammer Room Switch Chest":  _chest(emu, st, 0x0B, 0x10),
-            "Gerudo Training Ground Freestanding Key":          _ground(emu, st, 0x0B, 0x1),
-            "Gerudo Training Ground Maze Right Central Chest":  _chest(emu, st, 0x0B, 0x05),
-            "Gerudo Training Ground Maze Right Side Chest":     _chest(emu, st, 0x0B, 0x08),
-            "Gerudo Training Ground Underwater Silver Rupee Chest": _chest(emu, st, 0x0B, 0x0D),
-            "Gerudo Training Ground Beamos Chest":              _chest(emu, st, 0x0B, 0x01),
-            "Gerudo Training Ground Hidden Ceiling Chest":      _chest(emu, st, 0x0B, 0x0B),
-            "Gerudo Training Ground Maze Path First Chest":     _chest(emu, st, 0x0B, 0x06),
-            "Gerudo Training Ground Maze Path Second Chest":    _chest(emu, st, 0x0B, 0x0A),
-            "Gerudo Training Ground Maze Path Third Chest":     _chest(emu, st, 0x0B, 0x09),
-            "Gerudo Training Ground Maze Path Final Chest":     _chest(emu, st, 0x0B, 0x0C),
-        })
-    else:
-        checks.update({
-            "Gerudo Training Ground MQ Lobby Left Chest":            _chest(emu, st, 0xB, 0x13),
-            "Gerudo Training Ground MQ Lobby Right Chest":           _chest(emu, st, 0xB, 0x7),
-            "Gerudo Training Ground MQ First Iron Knuckle Chest":    _chest(emu, st, 0xB, 0x0),
-            "Gerudo Training Ground MQ Before Heavy Block Chest":    _chest(emu, st, 0xB, 0x11),
-            "Gerudo Training Ground MQ Heavy Block Chest":           _chest(emu, st, 0xB, 0x2),
-            "Gerudo Training Ground MQ Eye Statue Chest":            _chest(emu, st, 0xB, 0x3),
-            "Gerudo Training Ground MQ Ice Arrows Chest":            _chest(emu, st, 0xB, 0x4),
-            "Gerudo Training Ground MQ Second Iron Knuckle Chest":   _chest(emu, st, 0xB, 0x12),
-            "Gerudo Training Ground MQ Flame Circle Chest":          _chest(emu, st, 0xB, 0xE),
-            "Gerudo Training Ground MQ Maze Right Central Chest":    _chest(emu, st, 0xB, 0x5),
-            "Gerudo Training Ground MQ Maze Right Side Chest":       _chest(emu, st, 0xB, 0x8),
-            "Gerudo Training Ground MQ Underwater Silver Rupee Chest":_chest(emu, st, 0xB, 0xD),
-            "Gerudo Training Ground MQ Dinolfos Chest":              _chest(emu, st, 0xB, 0x1),
-            "Gerudo Training Ground MQ Hidden Ceiling Chest":        _chest(emu, st, 0xB, 0xB),
-            "Gerudo Training Ground MQ Maze Path First Chest":       _chest(emu, st, 0xB, 0x6),
-            "Gerudo Training Ground MQ Maze Path Third Chest":       _chest(emu, st, 0xB, 0x9),
-            "Gerudo Training Ground MQ Maze Path Second Chest":      _chest(emu, st, 0xB, 0xA),
-        })
-    return checks
-
-
-def _haunted_wasteland(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    return {
-        "Wasteland Bombchu Salesman": _salesman(emu, st, 0x5E, 0x01),
-        "Wasteland Chest":           _chest(emu, st, 0x5E, 0x00),
-        "Wasteland GS":              _skulltula(emu, 0x15, 0x1),
-    }
-
-
-def _desert_colossus(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    return {
-        "Colossus Great Fairy Reward":       _igi(emu, 0x2, 0x2),
-        "Colossus Freestanding PoH":         _ground(emu, st, 0x5C, 0xD),
-        "Colossus Deku Scrub Grotto Front":  _scrub(emu, 0x27, 0x9),
-        "Colossus Deku Scrub Grotto Rear":   _scrub(emu, 0x27, 0x8),
-        "Colossus GS Bean Patch":            _skulltula(emu, 0x15, 0x0),
-        "Colossus GS Tree":                  _skulltula(emu, 0x15, 0x3),
-        "Colossus GS Hill":                  _skulltula(emu, 0x15, 0x2),
-    }
-
-
-def _spirit_temple(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    checks = {}
-    if not _is_mq(emu, st, 0x6):
-        checks.update({
-            "Spirit Temple Child Bridge Chest":           _chest(emu, st, 0x06, 0x08),
-            "Spirit Temple Child Early Torches Chest":    _chest(emu, st, 0x06, 0x00),
-            "Spirit Temple Child Climb North Chest":      _chest(emu, st, 0x06, 0x06),
-            "Spirit Temple Child Climb East Chest":       _chest(emu, st, 0x06, 0x0C),
-            "Spirit Temple Map Chest":                    _chest(emu, st, 0x06, 0x03),
-            "Spirit Temple Sun Block Room Chest":         _chest(emu, st, 0x06, 0x01),
-            "Spirit Temple Silver Gauntlets Chest":       _chest(emu, st, 0x5C, 0x0B),
-            "Spirit Temple Compass Chest":                _chest(emu, st, 0x06, 0x04),
-            "Spirit Temple Early Adult Right Chest":      _chest(emu, st, 0x06, 0x07),
-            "Spirit Temple First Mirror Left Chest":      _chest(emu, st, 0x06, 0x0D),
-            "Spirit Temple First Mirror Right Chest":     _chest(emu, st, 0x06, 0x0E),
-            "Spirit Temple Statue Room Northeast Chest":  _chest(emu, st, 0x06, 0x0F),
-            "Spirit Temple Statue Room Hand Chest":       _chest(emu, st, 0x06, 0x02),
-            "Spirit Temple Near Four Armos Chest":        _chest(emu, st, 0x06, 0x05),
-            "Spirit Temple Hallway Right Invisible Chest":_chest(emu, st, 0x06, 0x14),
-            "Spirit Temple Hallway Left Invisible Chest": _chest(emu, st, 0x06, 0x15),
-            "Spirit Temple Mirror Shield Chest":          _chest(emu, st, 0x5C, 0x09),
-            "Spirit Temple Boss Key Chest":               _chest(emu, st, 0x06, 0x0A),
-            "Spirit Temple Topmost Chest":                _chest(emu, st, 0x06, 0x12),
-            "Spirit Temple GS Metal Fence":               _skulltula(emu, 0x06, 0x4),
-            "Spirit Temple GS Sun on Floor Room":         _skulltula(emu, 0x06, 0x3),
-            "Spirit Temple GS Hall After Sun Block Room": _skulltula(emu, 0x06, 0x0),
-            "Spirit Temple GS Lobby":                     _skulltula(emu, 0x06, 0x2),
-            "Spirit Temple GS Boulder Room":              _skulltula(emu, 0x06, 0x1),
-        })
-    else:
-        checks.update({
-            "Spirit Temple MQ Entrance Front Left Chest":   _chest(emu, st, 0x6, 0x1A),
-            "Spirit Temple MQ Entrance Back Right Chest":   _chest(emu, st, 0x6, 0x1F),
-            "Spirit Temple MQ Entrance Front Right Chest":  _chest(emu, st, 0x6, 0x1B),
-            "Spirit Temple MQ Entrance Back Left Chest":    _chest(emu, st, 0x6, 0x1E),
-            "Spirit Temple MQ Map Chest":                   _chest(emu, st, 0x6, 0x0),
-            "Spirit Temple MQ Map Room Enemy Chest":        _chest(emu, st, 0x6, 0x8),
-            "Spirit Temple MQ Child Climb North Chest":     _chest(emu, st, 0x6, 0x6),
-            "Spirit Temple MQ Child Climb South Chest":     _chest(emu, st, 0x6, 0xC),
-            "Spirit Temple MQ Compass Chest":               _chest(emu, st, 0x6, 0x3),
-            "Spirit Temple MQ Silver Block Hallway Chest":  _chest(emu, st, 0x6, 0x1C),
-            "Spirit Temple MQ Sun Block Room Chest":        _chest(emu, st, 0x6, 0x1),
-            "Spirit Temple Silver Gauntlets Chest":         _chest(emu, st, 0x5C, 0xB),
-            "Spirit Temple MQ Child Hammer Switch Chest":   _chest(emu, st, 0x6, 0x1D),
-            "Spirit Temple MQ Statue Room Lullaby Chest":   _chest(emu, st, 0x6, 0xF),
-            "Spirit Temple MQ Statue Room Invisible Chest": _chest(emu, st, 0x6, 0x2),
-            "Spirit Temple MQ Leever Room Chest":           _chest(emu, st, 0x6, 0x4),
-            "Spirit Temple MQ Symphony Room Chest":         _chest(emu, st, 0x6, 0x7),
-            "Spirit Temple MQ Beamos Room Chest":           _chest(emu, st, 0x6, 0x19),
-            "Spirit Temple MQ Chest Switch Chest":          _chest(emu, st, 0x6, 0x18),
-            "Spirit Temple MQ Boss Key Chest":              _chest(emu, st, 0x6, 0x5),
-            "Spirit Temple Mirror Shield Chest":            _chest(emu, st, 0x5C, 0x9),
-            "Spirit Temple MQ Mirror Puzzle Invisible Chest":_chest(emu, st, 0x6, 0x12),
-            "Spirit Temple MQ GS Sun Block Room":           _skulltula(emu, 0x6, 0x0),
-            "Spirit Temple MQ GS Leever Room":              _skulltula(emu, 0x6, 0x1),
-            "Spirit Temple MQ GS Symphony Room":            _skulltula(emu, 0x6, 0x3),
-            "Spirit Temple MQ GS Nine Thrones Room West":   _skulltula(emu, 0x6, 0x2),
-            "Spirit Temple MQ GS Nine Thrones Room North":  _skulltula(emu, 0x6, 0x4),
-        })
-    checks["Spirit Temple Twinrova Heart"] = _boss_heart(emu, st, 0x17, 0x0B)
-    checks["Twinrova"]                     = _boss_reward(st, 0x0B)
-    return checks
-
-
-def _ganons_castle(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    checks = {}
-    if not _is_mq(emu, st, 0xD):
-        checks.update({
-            "Ganons Castle Forest Trial Chest":                   _chest(emu, st, 0x0D, 0x09),
-            "Ganons Castle Water Trial Left Chest":               _chest(emu, st, 0x0D, 0x07),
-            "Ganons Castle Water Trial Right Chest":              _chest(emu, st, 0x0D, 0x06),
-            "Ganons Castle Shadow Trial Front Chest":             _chest(emu, st, 0x0D, 0x08),
-            "Ganons Castle Shadow Trial Golden Gauntlets Chest":  _chest(emu, st, 0x0D, 0x05),
-            "Ganons Castle Light Trial First Left Chest":         _chest(emu, st, 0x0D, 0x0C),
-            "Ganons Castle Light Trial Second Left Chest":        _chest(emu, st, 0x0D, 0x0B),
-            "Ganons Castle Light Trial Third Left Chest":         _chest(emu, st, 0x0D, 0x0D),
-            "Ganons Castle Light Trial First Right Chest":        _chest(emu, st, 0x0D, 0x0E),
-            "Ganons Castle Light Trial Second Right Chest":       _chest(emu, st, 0x0D, 0x0A),
-            "Ganons Castle Light Trial Third Right Chest":        _chest(emu, st, 0x0D, 0x0F),
-            "Ganons Castle Light Trial Invisible Enemies Chest":  _chest(emu, st, 0x0D, 0x10),
-            "Ganons Castle Light Trial Lullaby Chest":            _chest(emu, st, 0x0D, 0x11),
-            "Ganons Castle Spirit Trial Crystal Switch Chest":    _chest(emu, st, 0x0D, 0x12),
-            "Ganons Castle Spirit Trial Invisible Chest":         _chest(emu, st, 0x0D, 0x14),
-            "Ganons Castle Deku Scrub Left":                      _scrub(emu, 0xD, 0x9),
-            "Ganons Castle Deku Scrub Center-Left":               _scrub(emu, 0xD, 0x6),
-            "Ganons Castle Deku Scrub Center-Right":              _scrub(emu, 0xD, 0x4),
-            "Ganons Castle Deku Scrub Right":                     _scrub(emu, 0xD, 0x8),
-        })
-    else:
-        checks.update({
-            "Ganons Castle MQ Forest Trial Freestanding Key":       _ground(emu, st, 0xD, 0x1),
-            "Ganons Castle MQ Forest Trial Eye Switch Chest":        _chest(emu, st, 0xD, 0x2),
-            "Ganons Castle MQ Forest Trial Frozen Eye Switch Chest": _chest(emu, st, 0xD, 0x3),
-            "Ganons Castle MQ Water Trial Chest":                    _chest(emu, st, 0xD, 0x1),
-            "Ganons Castle MQ Shadow Trial Bomb Flower Chest":       _chest(emu, st, 0xD, 0x0),
-            "Ganons Castle MQ Shadow Trial Eye Switch Chest":        _chest(emu, st, 0xD, 0x5),
-            "Ganons Castle MQ Light Trial Lullaby Chest":            _chest(emu, st, 0xD, 0x4),
-            "Ganons Castle MQ Spirit Trial First Chest":             _chest(emu, st, 0xD, 0xA),
-            "Ganons Castle MQ Spirit Trial Invisible Chest":         _chest(emu, st, 0xD, 0x14),
-            "Ganons Castle MQ Spirit Trial Sun Front Left Chest":    _chest(emu, st, 0xD, 0x9),
-            "Ganons Castle MQ Spirit Trial Sun Back Left Chest":     _chest(emu, st, 0xD, 0x8),
-            "Ganons Castle MQ Spirit Trial Sun Back Right Chest":    _chest(emu, st, 0xD, 0x7),
-            "Ganons Castle MQ Spirit Trial Golden Gauntlets Chest":  _chest(emu, st, 0xD, 0x6),
-            "Ganons Castle MQ Deku Scrub Left":                      _scrub(emu, 0xD, 0x9),
-            "Ganons Castle MQ Deku Scrub Center-Left":               _scrub(emu, 0xD, 0x6),
-            "Ganons Castle MQ Deku Scrub Center":                    _scrub(emu, 0xD, 0x4),
-            "Ganons Castle MQ Deku Scrub Center-Right":              _scrub(emu, 0xD, 0x8),
-            "Ganons Castle MQ Deku Scrub Right":                     _scrub(emu, 0xD, 0x1),
-        })
-    checks["Ganons Tower Boss Key Chest"] = _chest(emu, st, 0x0A, 0x0B)
-    return checks
-
-
-def _outside_ganons_castle(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    return {
-        "OGC Great Fairy Reward": _fairy(emu, st, 0x3B, 0x8),
-        "OGC GS":                 _skulltula(emu, 0x0E, 0x0),
-    }
-
-
-def _songs(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    return {
-        "Song from Impa":               _event(emu, 0x5, 0x9),
-        "Song from Malon":              _event(emu, 0x5, 0x8),
-        "Song from Saria":              _event(emu, 0x5, 0x7),
-        "Song from Royal Familys Tomb": _event(emu, 0x5, 0xA),
-        "Song from Ocarina of Time":    _event(emu, 0xA, 0x9),
-        "Song from Windmill":           _event(emu, 0x5, 0xB),
-        "Sheik in Forest":              _event(emu, 0x5, 0x0),
-        "Sheik in Crater":              _event(emu, 0x5, 0x1),
-        "Sheik in Ice Cavern":          _event(emu, 0x5, 0x2),
-        "Sheik at Colossus":            _event(emu, 0xA, 0xC),
-        "Sheik in Kakariko":            _event(emu, 0x5, 0x4),
-        "Sheik at Temple":              _event(emu, 0x5, 0x5),
-    }
+SHOP_CONTEXT_OFFSETS: Dict[int, int] = {
+    # ROM shop table index -> save-context shop bitfield group.
+    0: 6,  # Kokiri Shop
+    1: 3,  # Kak Potion Shop
+    2: 1,  # Market Bombchu Shop
+    3: 0,  # Market Potion Shop
+    4: 4,  # Market Bazaar
+    5: 7,  # Kak Bazaar
+    7: 2,  # Zora Shop
+    8: 5,  # Goron Shop
+}
+
+MQ_DUNGEON_TAGS: Dict[str, int] = {
+    "Deku Tree": 0x0,
+    "Dodongo's Cavern": 0x1,
+    "Jabu Jabu's Belly": 0x2,
+    "Forest Temple": 0x3,
+    "Fire Temple": 0x4,
+    "Water Temple": 0x5,
+    "Spirit Temple": 0x6,
+    "Shadow Temple": 0x7,
+    "Bottom of the Well": 0x8,
+    "Ice Cavern": 0x9,
+    "Gerudo Training Ground": 0xB,
+    "Gerudo Training Ground MQ": 0xB,
+    "Ganon's Castle": 0xD,
+}
+
+BOSS_HEART_REWARD_FLAGS: Dict[int, int] = {
+    0x11: 0x05,  # Queen Gohma
+    0x12: 0x06,  # King Dodongo
+    0x13: 0x07,  # Barinade
+    0x14: 0x08,  # Phantom Ganon
+    0x15: 0x09,  # Volvagia
+    0x16: 0x0A,  # Morpha
+    0x17: 0x0B,  # Twinrova
+    0x18: 0x0C,  # Bongo Bongo
+}
+
+GenericLocationRule = Tuple[str, str, Tuple[int, ...], Tuple[str, ...]]
+SCRUB_ITEM_BITS: Dict[int, int] = {
+    scrub_item: index
+    for index, (scrub_item, _default_price, _text_id, _text_replacement) in enumerate(business_scrubs, start=1)
+}
+GROTTO_SCRUB_SCENE_BASE = 0xD6
+
+SCRUB_FALLBACK_CHECKS: Dict[str, Callable[[EmuLoaderClient, OoTBridgeState], bool]] = {
+    "LW Deku Scrub Near Bridge": lambda emu, st: _inf(emu, 0x33, 0x2),
+    "LW Deku Scrub Grotto Front": lambda emu, st: _inf(emu, 0x33, 0x3),
+    "HF Deku Scrub Grotto": lambda emu, st: _igi(emu, 0x0, 0x3),
+}
+
+
+def _as_tags(tags) -> Tuple[str, ...]:
+    if tags is None:
+        return ()
+    if isinstance(tags, str):
+        return (tags,)
+    return tuple(tags)
+
+
+def _mask_to_bit(mask: int) -> int:
+    return mask.bit_length() - 1
+
+
+def _active_location_variant(emu: EmuLoaderClient, st: OoTBridgeState, tags: Tuple[str, ...]) -> bool:
+    has_vanilla = "Vanilla" in tags
+    has_mq = "Master Quest" in tags
+    if has_vanilla == has_mq:
+        return True
+
+    for tag, dungeon_id in MQ_DUNGEON_TAGS.items():
+        if tag in tags:
+            is_mq = _is_mq(emu, st, dungeon_id)
+            return is_mq if has_mq else not is_mq
+    return True
+
+
+def _is_shop_slot_5_to_8(name: str) -> bool:
+    return name.endswith(("Item 5", "Item 6", "Item 7", "Item 8"))
+
+
+def _shop_context_rule(name: str, addresses) -> Optional[Tuple[int, int]]:
+    if not _is_shop_slot_5_to_8(name) or addresses is None:
+        return None
+    address = addresses[0]
+    if address is None:
+        return None
+
+    offset = address - 0xC71ED0
+    if offset < 0:
+        return None
+    rom_shop_id = offset // 0x40
+    shelf_id = (offset % 0x40) // 0x08
+    shop_context = SHOP_CONTEXT_OFFSETS.get(rom_shop_id)
+    if shop_context is None or not 4 <= shelf_id <= 7:
+        return None
+    return shop_context, shelf_id - 4
+
+
+def _scrub_rule(loc_type: str, scene: int, default: int) -> Optional[Tuple[int, int]]:
+    bit = SCRUB_ITEM_BITS.get(default)
+    if bit is None:
+        return None
+    if loc_type == "GrottoScrub":
+        return scene - GROTTO_SCRUB_SCENE_BASE, bit
+    return scene, bit
+
+
+def _build_generic_location_rules() -> List[GenericLocationRule]:
+    rules: List[GenericLocationRule] = []
+    for name, data in location_table.items():
+        loc_type, scene, default, addresses, _vanilla_item, tags = data
+        tag_tuple = _as_tags(tags)
+
+        if loc_type == "Chest" and scene is not None and default is not None:
+            rules.append((name, "chest", (int(scene), int(default)), tag_tuple))
+        elif loc_type == "Collectable" and scene is not None and default is not None:
+            rules.append((name, "ground", (int(scene), int(default)), tag_tuple))
+        elif loc_type == "GS Token" and scene is not None and default is not None:
+            rules.append((name, "skulltula", (int(scene), _mask_to_bit(int(default))), tag_tuple))
+        elif loc_type == "Shop":
+            shop_rule = _shop_context_rule(name, addresses)
+            if shop_rule is not None:
+                rules.append((name, "shop", shop_rule, tag_tuple))
+        elif loc_type == "MaskShop" and scene is not None and default is not None:
+            rules.append((name, "mask_shop", (int(scene), int(default)), tag_tuple))
+        elif loc_type == "Boss" and default is not None:
+            rules.append((name, "boss", (int(default),), tag_tuple))
+        elif loc_type == "BossHeart" and scene in BOSS_HEART_REWARD_FLAGS:
+            rules.append((name, "boss_heart", (int(scene), BOSS_HEART_REWARD_FLAGS[int(scene)]), tag_tuple))
+        elif loc_type in {"Scrub", "GrottoScrub"} and scene is not None and default is not None:
+            scrub_rule = _scrub_rule(loc_type, int(scene), int(default))
+            if scrub_rule is not None:
+                rules.append((name, "scrub", scrub_rule, tag_tuple))
+
+    return rules
+
+
+GENERIC_LOCATION_RULES = _build_generic_location_rules()
+
+# Special locations that need extra bridge information not derivable from the location list (like scene-specific permanent bits)
+SPECIAL_LOCATION_CHECKS: Dict[str, Callable[[EmuLoaderClient, OoTBridgeState], bool]] = {
+    "KF Links House Cow": lambda emu, st: _cow(emu, st, 0x34, 0x18),
+    "LW Gift from Saria": lambda emu, st: _event(emu, 0xC, 0x1),
+    "LW Ocarina Memory Game": lambda emu, st: _igi(emu, 0x3, 0x7),
+    "LW Target in Woods": lambda emu, st: _igi(emu, 0x2, 0x5),
+    "Deku Theater Skull Mask": lambda emu, st: _igi(emu, 0x2, 0x6),
+    "Deku Theater Mask of Truth": lambda emu, st: _igi(emu, 0x2, 0x7),
+    "LW Skull Kid": lambda emu, st: _igi(emu, 0x3, 0x6),
+    "LW Trade Cojiro": lambda emu, st: _adult_trade(emu, st, 0x5B, 0x1F, 13),
+    "LW Trade Odd Potion": lambda emu, st: _adult_trade(emu, st, 0x5B, 0x21, 15),
+    "HF Ocarina of Time Item": lambda emu, st: _event(emu, 0x4, 0x3),
+    "HF Cow Grotto Cow": lambda emu, st: _cow(emu, st, 0x3E, 0x19),
+    "LLR Talons Chickens": lambda emu, st: _igi(emu, 0x1, 0x2),
+    "LLR Tower Left Cow": lambda emu, st: _cow(emu, st, 0x4C, 0x19),
+    "LLR Tower Right Cow": lambda emu, st: _cow(emu, st, 0x4C, 0x18),
+    "LLR Stables Left Cow": lambda emu, st: _cow(emu, st, 0x36, 0x18),
+    "LLR Stables Right Cow": lambda emu, st: _cow(emu, st, 0x36, 0x19),
+    "Gift from Sages": lambda emu, st: _check_temp_context(st, 0xFF, 0x05, 0x03),
+    "Market Shooting Gallery Reward": lambda emu, st: _igi(emu, 0x0, 0x5),
+    "Market Bombchu Bowling First Prize": lambda emu, st: _igi(emu, 0x3, 0x1),
+    "Market Bombchu Bowling Second Prize": lambda emu, st: _igi(emu, 0x3, 0x2),
+    "Market Treasure Chest Game Salesman": lambda emu, st: _tcg_salesman(emu, st),
+    "Market Treasure Chest Game Reward": lambda emu, st: _igi(emu, 0x2, 0x3) or _chest(emu, st, 0x10, 0x0A),
+    "Market Lost Dog": lambda emu, st: _inf(emu, 0x33, 0x1),
+    "Market 10 Big Poes": lambda emu, st: _poe_bottle(emu, st),
+    "ToT Light Arrows Cutscene": lambda emu, st: _event(emu, 0xC, 0x4),
+    "ToT Reward from Rauru": lambda emu, st: _event(emu, 0x4, 0x5) or _boss_reward(st, 0x04),
+    "HC Malon Egg": lambda emu, st: _event(emu, 0x1, 0x2),
+    "HC Zeldas Letter": lambda emu, st: _event(emu, 0x4, 0x0),
+    "HC Great Fairy Reward": lambda emu, st: _igi(emu, 0x2, 0x1),
+    "Kak Anju as Child": lambda emu, st: _igi(emu, 0x0, 0x4),
+    "Kak Anju as Adult": lambda emu, st: _igi(emu, 0x4, 0x4),
+    "Kak Anju Trade Pocket Cucco": lambda emu, st: _adult_trade(emu, st, 0x52, 0x0E, 12),
+    "Kak Granny Trade Odd Mushroom": lambda emu, st: _adult_trade(emu, st, 0x4E, 0x20, 14),
+    "Kak Granny Buy Blue Potion": lambda emu, st: _sc(emu, 0x4E, 0x00, 0x10) or _base_item(emu, st, 0x4E, 0x12),
+    "Kak Man on Roof": lambda emu, st: _igi(emu, 0x3, 0x5),
+    "Kak Shooting Gallery Reward": lambda emu, st: _igi(emu, 0x0, 0x6),
+    "Kak 10 Gold Skulltula Reward": lambda emu, st: _event(emu, 0xD, 0xA),
+    "Kak 20 Gold Skulltula Reward": lambda emu, st: _event(emu, 0xD, 0xB),
+    "Kak 30 Gold Skulltula Reward": lambda emu, st: _event(emu, 0xD, 0xC),
+    "Kak 40 Gold Skulltula Reward": lambda emu, st: _event(emu, 0xD, 0xD),
+    "Kak 50 Gold Skulltula Reward": lambda emu, st: _event(emu, 0xD, 0xE),
+    "Kak 100 Gold Skulltula Reward": lambda emu, st: _base_item(emu, st, 0x50, 0x56),
+    "Kak Impas House Cow": lambda emu, st: _cow(emu, st, 0x37, 0x18),
+    "DMT Great Fairy Reward": lambda emu, st: _fairy(emu, st, 0x3B, 0x18) or _check_temp_context(st, 0xFF, 0x05, 0x13),
+    "DMT Biggoron": lambda emu, st: _bgs(emu) or _adult_trade(emu, st, 0x60, 0x57, 21),
+    "DMT Trade Broken Sword": lambda emu, st: _adult_trade(emu, st, 0x60, 0x23, 17),
+    "DMT Trade Eyedrops": lambda emu, st: _adult_trade(emu, st, 0x60, 0x26, 20),
+    "DMT Cow Grotto Cow": lambda emu, st: _cow(emu, st, 0x3E, 0x18),
+    "GC Darunias Joy": lambda emu, st: _event(emu, 0x3, 0x6),
+    "GC Rolling Goron as Child": lambda emu, st: _inf(emu, 0x22, 0x6),
+    "GC Rolling Goron as Adult": lambda emu, st: _inf(emu, 0x20, 0x1),
+    "GC Medigoron": lambda emu, st: _medigoron(emu, st, 0x62, 0x1),
+    "DMC Great Fairy Reward": lambda emu, st: _fairy(emu, st, 0x3B, 0x10) or _check_temp_context(st, 0xFF, 0x05, 0x14),
+    "ZR Magic Bean Salesman": lambda emu, st: _bean(emu, st, 0x54, 0x1),
+    "ZR Frogs in the Rain": lambda emu, st: _event(emu, 0xD, 0x6),
+    "ZR Frogs Ocarina Game": lambda emu, st: _event(emu, 0xD, 0x0),
+    "ZR Frogs Zeldas Lullaby": lambda emu, st: _event(emu, 0xD, 0x1),
+    "ZR Frogs Eponas Song": lambda emu, st: _event(emu, 0xD, 0x2),
+    "ZR Frogs Suns Song": lambda emu, st: _event(emu, 0xD, 0x3),
+    "ZR Frogs Sarias Song": lambda emu, st: _event(emu, 0xD, 0x4),
+    "ZR Frogs Song of Time": lambda emu, st: _event(emu, 0xD, 0x5),
+    "ZD Diving Minigame": lambda emu, st: _event(emu, 0x3, 0x8),
+    "ZD King Zora Thawed": lambda emu, st: _inf(emu, 0x26, 0x1),
+    "ZD Trade Prescription": lambda emu, st: _adult_trade(emu, st, 0x58, 0x24, 18),
+    "ZF Great Fairy Reward": lambda emu, st: _igi(emu, 0x2, 0x0),
+    "Jabu Jabus Belly MQ Cow": lambda emu, st: _cow(emu, st, 0x02, 0x18),
+    "LH Underwater Item": lambda emu, st: _event(emu, 0x3, 0x1),
+    "LH Child Fishing": lambda emu, st: _fishing(emu, False),
+    "LH Adult Fishing": lambda emu, st: _fishing(emu, True),
+    "LH Loach Fishing": lambda emu, st: _loach_fishing(emu),
+    "LH Lab Dive": lambda emu, st: _igi(emu, 0x3, 0x0),
+    "LH Trade Eyeball Frog": lambda emu, st: _adult_trade(emu, st, 0x38, 0x25, 19),
+    "LH Sun": lambda emu, st: _fire_arrows(emu, st, 0x57, 0x0),
+    "GV Trade Poachers Saw": lambda emu, st: _adult_trade(emu, st, 0x5A, 0x22, 16),
+    "GV Cow": lambda emu, st: _cow(emu, st, 0x5A, 0x18),
+    "Hideout Gerudo Membership Card": lambda emu, st: _membership(emu),
+    "GF HBA 1000 Points": lambda emu, st: _inf(emu, 0x33, 0x0),
+    "GF HBA 1500 Points": lambda emu, st: _igi(emu, 0x0, 0x7),
+    "Wasteland Bombchu Salesman": lambda emu, st: _salesman(emu, st, 0x5E, 0x1),
+    "Colossus Great Fairy Reward": lambda emu, st: _igi(emu, 0x2, 0x2),
+    "OGC Great Fairy Reward": lambda emu, st: _fairy(emu, st, 0x3B, 0x8),
+    "Song from Impa": lambda emu, st: _event(emu, 0x5, 0x9),
+    "Song from Malon": lambda emu, st: _event(emu, 0x5, 0x8),
+    "Song from Saria": lambda emu, st: _event(emu, 0x5, 0x7),
+    "Song from Royal Familys Tomb": lambda emu, st: _event(emu, 0x5, 0xA),
+    "Song from Ocarina of Time": lambda emu, st: _event(emu, 0xA, 0x9),
+    "Song from Windmill": lambda emu, st: _event(emu, 0x5, 0xB),
+    "Sheik in Forest": lambda emu, st: _event(emu, 0x5, 0x0),
+    "Sheik in Crater": lambda emu, st: _event(emu, 0x5, 0x1),
+    "Sheik in Ice Cavern": lambda emu, st: _event(emu, 0x5, 0x2),
+    "Sheik at Colossus": lambda emu, st: _event(emu, 0xA, 0xC),
+    "Sheik in Kakariko": lambda emu, st: _event(emu, 0x5, 0x4),
+    "Sheik at Temple": lambda emu, st: _event(emu, 0x5, 0x5),
+}
+
+SPECIAL_LOCATION_TAGS: Dict[str, Tuple[str, ...]] = {
+    name: _as_tags(location_table[name][5])
+    for name in SPECIAL_LOCATION_CHECKS
+    if name in location_table
+}
+
+
+def _check_generic_location(emu: EmuLoaderClient, st: OoTBridgeState, name: str, kind: str, args: Tuple[int, ...]) -> bool:
+    if kind == "chest":
+        return _chest(emu, st, args[0], args[1])
+    if kind == "ground":
+        return _ground(emu, st, args[0], args[1])
+    if kind == "skulltula":
+        return _skulltula(emu, args[0], args[1])
+    if kind == "shop":
+        return _shop(emu, args[0], args[1])
+    if kind == "mask_shop":
+        return _shop_location(emu, st, name, args[0], args[1])
+    if kind == "boss":
+        return _boss_reward(st, args[0])
+    if kind == "boss_heart":
+        return _boss_heart(emu, st, args[0], args[1])
+    if kind == "scrub":
+        return SCRUB_FALLBACK_CHECKS.get(name, lambda _emu, _st: False)(emu, st) or _scrub(emu, args[0], args[1])
+    raise NotImplementedError(f"Unhandled generic location rule: {kind}")
+
+
+def _check_generic_locations(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
+    active_cache: Dict[Tuple[str, ...], bool] = {}
+    out: dict = {}
+    for name, kind, args, tags in GENERIC_LOCATION_RULES:
+        if tags not in active_cache:
+            active_cache[tags] = _active_location_variant(emu, st, tags)
+        if active_cache[tags]:
+            out[name] = _check_generic_location(emu, st, name, kind, args)
+    return out
+
+
+def _check_special_locations(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
+    active_cache: Dict[Tuple[str, ...], bool] = {}
+    out: dict = {}
+    for name, check in SPECIAL_LOCATION_CHECKS.items():
+        tags = SPECIAL_LOCATION_TAGS.get(name, ())
+        if tags not in active_cache:
+            active_cache[tags] = _active_location_variant(emu, st, tags)
+        if active_cache[tags]:
+            out[name] = check(emu, st)
+    return out
 
 
 def _check_all_locations(emu: EmuLoaderClient, st: OoTBridgeState) -> dict:
-    out: dict = {}
-    for fn in (
-        _kokiri_forest, _lost_woods, _sacred_forest_meadow,
-        _deku_tree, _forest_temple,
-        _hyrule_field, _lon_lon_ranch, _market, _hyrule_castle,
-        _kakariko_village, _graveyard,
-        _bottom_of_well, _shadow_temple,
-        _death_mountain_trail, _goron_city, _death_mountain_crater,
-        _dodongos_cavern, _fire_temple,
-        _zoras_river, _zoras_domain, _zoras_fountain,
-        _jabu, _ice_cavern,
-        _lake_hylia, _water_temple,
-        _gerudo_valley, _gerudo_fortress, _gerudo_training_ground,
-        _haunted_wasteland, _desert_colossus, _spirit_temple,
-        _ganons_castle, _outside_ganons_castle,
-        _songs,
-    ):
-        out.update(fn(emu, st))
+    out: dict = _check_generic_locations(emu, st)
+    out.update(_check_special_locations(emu, st))
     return out
 
 
