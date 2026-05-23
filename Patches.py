@@ -80,6 +80,7 @@ def patch_rom(world, rom):
             address, value = [int(x, 16) for x in line.split(',')]
             rom.write_int32(address, value)
     rom.scan_dmadata_update()
+    patch_inexact_collectible_shortcuts(rom)
 
     # Write Randomizer title screen logo
     with open(data_path('title.bin'), 'rb') as stream:
@@ -2303,6 +2304,23 @@ def write_rom_item(rom, item_id, item):
     row = [item[f] for f in item_row_fields]
     row_bytes = item_row_struct.pack(*row)
     rom.write_bytes(addr, row_bytes)
+
+
+def patch_inexact_collectible_shortcuts(rom):
+    # Incoming AP junk uses EnItem00 when collectible is set. That is only safe
+    # when the native collectible grants the same action as the item table row.
+    native_collectible_actions = rom.read_bytes(rom.sym('items'), rom.sym_length('items'))
+    for item_id in range(rom.sym_length('item_table') // item_row_struct.size):
+        item = read_rom_item(rom, item_id)
+        collectible = item['collectible']
+        if collectible == 0xFF:
+            continue
+        if (
+            collectible >= len(native_collectible_actions) or
+            native_collectible_actions[collectible] != item['action_id']
+        ):
+            item['collectible'] = 0xFF
+            write_rom_item(rom, item_id, item)
 
 
 texture_struct = struct.Struct('>HBxxxxxII') # Match texture_t in textures.c
