@@ -952,7 +952,7 @@ class OOTWorld(World):
 
 
     def item_precompleted_dungeon_name(self, item) -> Optional[str]:
-        if not getattr(item, 'dungeonitem', False):
+        if not getattr(item, 'restricted_dungeon_item', False):
             return None
         dungeon_name = self.item_dungeon_name_from_name(item.name)
         if dungeon_name is None:
@@ -1141,8 +1141,15 @@ class OOTWorld(World):
         prefill_items = []
         for item in self.itempool:
             precompleted_dungeon_item = self.item_precompleted_dungeon_name(item) is not None
-            if ((item.type in prefill_item_types and not precompleted_dungeon_item)
-                    or (self.accessibility == 'full' and precompleted_dungeon_item)):
+            dungeon_name = self.item_dungeon_name_from_name(item.name) if getattr(item, 'dungeonitem', False) else None
+            precompleted_dungeon_extra = (
+                dungeon_name is not None
+                and self.precompleted_dungeons.get(dungeon_name, False)
+                and not precompleted_dungeon_item
+            )
+            if precompleted_dungeon_extra:
+                main_items.append(item)
+            elif item.type in prefill_item_types or precompleted_dungeon_item:
                 prefill_items.append(item)
             else:
                 main_items.append(item)
@@ -1492,8 +1499,12 @@ class OOTWorld(World):
 
     def pre_fill(self):
 
+        placed_prefill_items = []
+
         def prefill_state(base_state):
             state = base_state.copy()
+            for item in placed_prefill_items:
+                self.collect(state, item)
             for item in self.get_pre_fill_items():
                 self.collect(state, item)
             state.sweep_for_advancements(locations=self.get_locations())
@@ -1538,6 +1549,34 @@ class OOTWorld(World):
 
         state = base_prefill_state()
 
+        # Pre-completed dungeons are intentionally empty of progression. Keep
+        # their own dungeon items inside them before generic empty-dungeon fill.
+        precompleted_dungeon_items = [
+            item for item in self.pre_fill_items
+            if self.item_precompleted_dungeon_name(item) is not None
+        ]
+        precompleted_items_by_dungeon = {}
+        for item in precompleted_dungeon_items:
+            precompleted_items_by_dungeon.setdefault(
+                self.item_precompleted_dungeon_name(item), []).append(item)
+        for dungeon_name, dungeon_items in precompleted_items_by_dungeon.items():
+            locations = [
+                location for location in self.multiworld.get_unfilled_locations(player=self.player)
+                if valid_dungeon_item_location(self, 'dungeon', dungeon_name, location)
+            ]
+            if len(locations) < len(dungeon_items):
+                raise FillError(
+                    f"OoT (Player {self.player}): not enough locations in pre-completed "
+                    f"{dungeon_name} for restricted dungeon items: "
+                    f"{[item.name for item in dungeon_items]}")
+            self.random.shuffle(locations)
+            self.random.shuffle(dungeon_items)
+            for location, item in zip(locations, dungeon_items):
+                self.pre_fill_items.remove(item)
+                self.multiworld.push_item(location, item, collect=False)
+                location.locked = True
+                placed_prefill_items.append(item)
+
         # Place dungeon items
         special_fill_types = [
             'GanonBossKey', 'BossKey', 'SmallKey', 'HideoutSmallKey',
@@ -1566,6 +1605,7 @@ class OOTWorld(World):
                     self.random.shuffle(locations)
                     fill_restrictive(self.multiworld, prefill_state(state), locations, stage_items,
                         single_player_placement=True, lock=True, allow_excluded=True)
+                    placed_prefill_items.extend(stage_items)
             else:
                 for dungeon_info in dungeon_table:
                     dungeon_name = dungeon_info['name']
@@ -1586,9 +1626,10 @@ class OOTWorld(World):
                         self.random.shuffle(locations)
                         fill_restrictive(self.multiworld, prefill_state(state), locations, dungeon_items,
                             single_player_placement=True, lock=True, allow_excluded=True)
+                        placed_prefill_items.extend(dungeon_items)
 
         # Place songs
-        # 5 built-in retries because this section can fail sometimes
+        # 15 built-in retries because this section can fail sometimes
         if self.shuffle_song_items != 'any':
             max_song_tries = 15
             tries = max_song_tries
@@ -1604,14 +1645,6 @@ class OOTWorld(World):
             songs = list(filter(lambda item: item.type == 'Song', self.pre_fill_items))
             for song in songs:
                 self.pre_fill_items.remove(song)
-
-            song_state_base = state
-            door_requires_song_of_time = self.open_door_of_time in {
-                'sot', 'oot_sot', 'stones_sot', 'stones_oot_sot'}
-            if door_requires_song_of_time and any(song.name == 'Song of Time' for song in songs):
-                # Do not let the Song of Time place itself behind the Door of Time.
-                # Key and dungeon-item prefill can still use the broader assumptions above.
-                song_state_base = base_prefill_state(assume_song_of_time=False, assume_time_travel=False)
 
             important_warps = (self.shuffle_special_interior_entrances or self.shuffle_overworld_entrances or
                                self.warp_songs or self.spawn_positions)
@@ -1636,10 +1669,11 @@ class OOTWorld(World):
                     self.random.shuffle(song_locations)
                     if self.shuffle_song_items == 'dungeon':
                         song_locations.sort(key=lambda location: 0 if location.name == 'Sheik in Ice Cavern' else 1)
-                    song_state = prefill_state(song_state_base)
+                    song_state = prefill_state(state)
 
                     fill_restrictive(self.multiworld, song_state, song_locations[:], songs[:],
                                      single_player_placement=True, lock=True, allow_excluded=True)
+                    placed_prefill_items.extend(songs)
                     logger.debug(
                         f"Successfully placed songs for player {self.player} "
                         f"after {max_song_tries + 1 - tries} attempt(s)")

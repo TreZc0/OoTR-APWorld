@@ -7,6 +7,13 @@ from decimal import Decimal, ROUND_HALF_UP
 
 # Generates item pools and places fixed items based on settings.
 
+class DungeonPoolItem(str):
+    def __new__(cls, name, restricted_dungeon_item=False):
+        item = str.__new__(cls, name)
+        item.restricted_dungeon_item = restricted_dungeon_item
+        return item
+
+
 plentiful_items = ([
     'Biggoron Sword',
     'Boomerang',
@@ -382,7 +389,12 @@ def generate_itempool(ootworld):
 
     # set up item pool
     (pool, placed_items) = get_pool_core(ootworld)
-    ootworld.itempool = [ootworld.create_item(item) for item in pool]
+    ootworld.itempool = []
+    for item_name in pool:
+        item = ootworld.create_item(item_name)
+        if getattr(item_name, 'restricted_dungeon_item', False):
+            item.restricted_dungeon_item = True
+        ootworld.itempool.append(item)
     for (location_name, item) in placed_items.items():
         location = multiworld.get_location(location_name, player)
         location.place_locked_item(ootworld.create_item(item, allow_arbitrary_name=True))
@@ -805,33 +817,27 @@ def get_pool_core(world):
             # Silver Rupees in dungeons
             elif location.type == 'SilverRupee':
                 shuffle_setting = world.shuffle_silver_rupees
-                dungeon_collection = None
+                dungeon_collection = dungeon.silver_rupees
                 if shuffle_setting == 'vanilla':
                     shuffle_item = False
                     location.show_in_spoiler = False
-                elif shuffle_setting == 'remove':
-                    world.multiworld.push_precollected(world.create_item(item))
-                    world.remove_from_start_inventory.append(item)
-                    item = IGNORE_LOCATION
-                    shuffle_item = False
-                    location.show_in_spoiler = False
-                else:
-                    # dungeon, overworld, any_dungeon, regional, anywhere
-                    shuffle_item = True
             # Any other item in a dungeon.
             elif location.type in ["Chest", "NPC", "Song", "Collectable", "Cutscene", "BossHeart"]:
                 shuffle_item = True
 
             # Handle dungeon item.
             if shuffle_setting is not None and dungeon_collection is not None and not shuffle_item:
-                dungeon_collection.append(world.create_item(item))
                 if shuffle_setting in ['remove', 'startwith']:
-                    world.multiworld.push_precollected(dungeon_collection[-1])
-                    world.remove_from_start_inventory.append(dungeon_collection[-1].name)
+                    removed_item = world.create_item(item)
+                    world.multiworld.push_precollected(removed_item)
+                    world.remove_from_start_inventory.append(removed_item.name)
                     item = get_junk_item(world.random)[0]
                     shuffle_item = True
-                elif shuffle_setting in ['any_dungeon', 'overworld', 'regional']:
-                    dungeon_collection[-1].priority = True
+                elif (shuffle_setting in ['any_dungeon', 'overworld', 'keysanity', 'regional', 'anywhere']
+                        and not world.precompleted_dungeons.get(dungeon.name, False)):
+                    shuffle_item = True
+                elif shuffle_item is None:
+                    dungeon_collection.append(world.create_item(item))
 
         elif location.type == 'SilverRupee':
             # This handles non-dungeon silver rupees (if any exist)
@@ -896,8 +902,12 @@ def get_pool_core(world):
             placed_items[location.name] = item
     # End of Locations loop.
 
-    # add unrestricted dungeon items to main item pool
-    pool.extend([item.name for item in get_unrestricted_dungeon_items(world)])
+    # AP fills restricted dungeon items through pre_fill, while upstream passes
+    # them separately to fill_dungeons_restrictive. Only add those restricted
+    # copies here; unrestricted copies entered the pool from their vanilla
+    # locations above.
+    for dungeon in world.dungeons:
+        pool.extend(DungeonPoolItem(item.name, True) for item in dungeon.get_restricted_dungeon_items())
 
     if world.shopsanity != 'off':
         pool.extend(min_shop_items)

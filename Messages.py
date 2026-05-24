@@ -23,6 +23,14 @@ EXTENDED_TABLE_SIZE = JPN_TABLE_SIZE + ENG_TABLE_SIZE # 0x8360 bytes, 4204 entri
 
 EXTENDED_TEXT_SIZE_LIMIT = JPN_TEXT_SIZE_LIMIT + ENG_TEXT_SIZE_LIMIT # 0x74000 bytes
 
+SLOW_ICON_IDS = frozenset({0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x04, 0x02})
+
+
+def display_icon_code(data):
+    icon_type = 'slow icon' if data in SLOW_ICON_IDS else 'icon'
+    return '<' + icon_type + ' ' + "{:02x}".format(data) + '>'
+
+
 # name of type, followed by number of additional bytes to read, follwed by a function that prints the code
 CONTROL_CODES = {
     0x00: ('pad', 0, lambda _: '<pad>' ),
@@ -41,7 +49,7 @@ CONTROL_CODES = {
     0x0F: ('name', 0, lambda _: '<name>' ),
     0x10: ('ocarina', 0, lambda _: '<ocarina>' ),
     0x12: ('sound', 2, lambda d: '<play SFX ' + "{:04x}".format(d) + '>' ),
-    0x13: ('icon', 1, lambda d: '<icon ' + "{:02x}".format(d) + '>' ),
+    0x13: ('icon', 1, display_icon_code ),
     0x14: ('speed', 1, lambda d: '<delay each character by ' + str(d) + ' frames>' ),
     0x15: ('background', 3, lambda d: '<set background to ' + "{:06x}".format(d) + '>' ),
     0x16: ('marathon', 0, lambda _: '<marathon time>' ),
@@ -762,7 +770,6 @@ class Message:
         ending_codes = [0x02, 0x07, 0x0A, 0x0B, 0x0E, 0x10]
         box_breaks = [0x04, 0x0C]
         slows_text = [0x08, 0x09, 0x14]
-        slow_icons = [0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x04, 0x02]
 
         text_codes = []
         instant_text_code = Text_Code(0x08, 0)
@@ -796,9 +803,11 @@ class Message:
                 else:
                     text_codes.append(Text_Code(0x04, 0))  # un-delayed break
                     text_codes.append(instant_text_code)  # allow instant
-            elif speed_up_text and code.code == 0x13 and code.data in slow_icons:
+            elif speed_up_text and code.code == 0x13 and code.data in SLOW_ICON_IDS:
                 text_codes.append(code)
-                text_codes.pop(find_last(text_codes, instant_text_code))  # remove last instance of instant text
+                instant_index = find_last(text_codes, instant_text_code)
+                if instant_index is not None:
+                    text_codes.pop(instant_index)  # remove last instance of instant text
                 text_codes.append(instant_text_code)  # allow instant
             else:
                 text_codes.append(code)
