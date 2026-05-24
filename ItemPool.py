@@ -675,14 +675,16 @@ def get_pool_core(world):
 
         # Gerudo Fortress freestanding Heart Piece (child-only, normally out of logic)
         elif location.vanilla_item == 'Piece of Heart (Out of Logic)':
-            if world.shuffle_gerudo_fortress_heart_piece == 'shuffle':
-                shuffle_item = True
-                item = 'Piece of Heart'
-            elif world.shuffle_gerudo_fortress_heart_piece == 'remove':
+            hideout_er = getattr(world, 'shuffle_hideout_entrances', False)
+            if hideout_er or world.shuffle_gerudo_fortress_heart_piece == 'remove':
                 shuffle_item = False
                 item = IGNORE_LOCATION
                 location.show_in_spoiler = False
-            else:  # vanilla
+            elif (world.shuffle_gerudo_fortress_heart_piece == 'shuffle'
+                    or world.logic_rules == 'advanced'):
+                shuffle_item = True
+                item = 'Piece of Heart'
+            else:
                 shuffle_item = False
                 location.show_in_spoiler = False
 
@@ -801,10 +803,14 @@ def get_pool_core(world):
                     shuffle_item = True
             # Silver Rupees in dungeons
             elif location.type == 'SilverRupee':
-                if world.shuffle_silver_rupees == 'vanilla':
+                shuffle_setting = world.shuffle_silver_rupees
+                dungeon_collection = None
+                if shuffle_setting == 'vanilla':
                     shuffle_item = False
                     location.show_in_spoiler = False
-                elif world.shuffle_silver_rupees == 'remove':
+                elif shuffle_setting == 'remove':
+                    world.multiworld.push_precollected(world.create_item(item))
+                    world.remove_from_start_inventory.append(item)
                     item = IGNORE_LOCATION
                     shuffle_item = False
                     location.show_in_spoiler = False
@@ -816,7 +822,7 @@ def get_pool_core(world):
                 shuffle_item = True
 
             # Handle dungeon item.
-            if shuffle_setting is not None and not shuffle_item:
+            if shuffle_setting is not None and dungeon_collection is not None and not shuffle_item:
                 dungeon_collection.append(world.create_item(item))
                 if shuffle_setting in ['remove', 'startwith']:
                     world.multiworld.push_precollected(dungeon_collection[-1])
@@ -832,6 +838,8 @@ def get_pool_core(world):
                 shuffle_item = False
                 location.show_in_spoiler = False
             elif world.shuffle_silver_rupees == 'remove':
+                world.multiworld.push_precollected(world.create_item(item))
+                world.remove_from_start_inventory.append(item)
                 item = IGNORE_LOCATION
                 shuffle_item = False
                 location.show_in_spoiler = False
@@ -1025,19 +1033,9 @@ def get_pool_core(world):
 def get_unrestricted_dungeon_items(ootworld):
     """Adds maps, compasses, small keys, boss keys, and Ganon boss key into item pool if they are not placed."""
     unrestricted_dungeon_items = []
-    add_settings = {'dungeon', 'any_dungeon', 'overworld', 'keysanity', 'regional'}
-    ganon_bk_setting = ootworld.shuffle_ganon_bosskey
     for dungeon in ootworld.dungeons:
-        if ootworld.shuffle_map in add_settings:
-            unrestricted_dungeon_items.extend(dungeon.maps)
-        if ootworld.shuffle_compass in add_settings:
-            unrestricted_dungeon_items.extend(dungeon.compasses)
-        if ootworld.shuffle_smallkeys in add_settings:
-            unrestricted_dungeon_items.extend(dungeon.small_keys)
-        if dungeon.name != 'Ganons Castle' and ootworld.shuffle_bosskeys in add_settings:
-            unrestricted_dungeon_items.extend(dungeon.boss_key)
-        if dungeon.name == 'Ganons Castle' and ganon_bk_setting in add_settings:
-            unrestricted_dungeon_items.extend(dungeon.boss_key)
+        unrestricted_dungeon_items.extend(dungeon.get_restricted_dungeon_items())
+        unrestricted_dungeon_items.extend(dungeon.get_unrestricted_dungeon_items())
     return unrestricted_dungeon_items
 
 

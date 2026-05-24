@@ -361,11 +361,13 @@ class MQDungeonCount(TrackRandomRange):
 
 
 class EmptyDungeons(Choice):
-    """Choose dungeons that are pre-completed. Pre-completed dungeons are filled with non-progression items."""
+    """Choose dungeons that are pre-completed. Pre-completed dungeons are filled with non-progression items.
+    Specific Rewards: choose rewards whose source or shuffled boss dungeon should be pre-completed."""
     display_name = "Pre-completed Dungeons Mode"
     option_none = 0
     option_specific = 1
     option_count = 2
+    option_rewards = 3
 
 
 class EmptyDungeonList(OptionSet):
@@ -380,6 +382,22 @@ class EmptyDungeonList(OptionSet):
         "Water Temple",
         "Shadow Temple",
         "Spirit Temple",
+    }
+
+
+class EmptyDungeonRewards(OptionSet):
+    """With pre-completed dungeons as Specific Rewards: chosen rewards whose dungeons are pre-completed."""
+    display_name = "Pre-completed Dungeon Rewards"
+    valid_keys = {
+        "Kokiri Emerald",
+        "Goron Ruby",
+        "Zora Sapphire",
+        "Light Medallion",
+        "Forest Medallion",
+        "Fire Medallion",
+        "Water Medallion",
+        "Shadow Medallion",
+        "Spirit Medallion",
     }
 
 
@@ -419,6 +437,7 @@ world_options: typing.Dict[str, type(Option)] = {
 
     "empty_dungeons_mode": EmptyDungeons,
     "empty_dungeons_list": EmptyDungeonList,
+    "empty_dungeons_rewards": EmptyDungeonRewards,
     "empty_dungeons_count": EmptyDungeonCount,
 }
 
@@ -1798,6 +1817,7 @@ class OoTOptions(PerGameCommonOptions):
     mq_dungeons_count: MQDungeonCount
     empty_dungeons_mode: EmptyDungeons
     empty_dungeons_list: EmptyDungeonList
+    empty_dungeons_rewards: EmptyDungeonRewards
     empty_dungeons_count: EmptyDungeonCount
     bridge_stones: BridgeStones
     bridge_medallions: BridgeMedallions

@@ -5,7 +5,6 @@ import typing
 
 from .Regions import TimeOfDay
 from .DungeonList import dungeon_table
-from .Hints import HintArea
 from .Items import oot_is_item_of_type
 from .LocationList import dungeon_song_locations
 
@@ -192,6 +191,10 @@ def set_rules(ootworld):
     # ganon can only carry triforce
     multiworld.get_location('Ganon', player).item_rule = lambda item: item.name == 'Triforce'
 
+    if ootworld.empty_dungeons_mode != 'none':
+        for location in multiworld.get_locations(player):
+            add_item_rule(location, lambda item, loc=location: valid_oot_item_placement(loc, item))
+
     # is_child = ootworld.parser.parse_rule('is_child')
     guarantee_hint = ootworld.parser.parse_rule('guarantee_hint')
 
@@ -369,3 +372,32 @@ def set_ocarina_note_rules(ootworld):
         if not forbidden:
             continue
         add_item_rule(location, lambda item, f=forbidden: item.name not in f)
+
+
+def valid_oot_item_placement(location, item) -> bool:
+    multiworld = location.parent_region.multiworld
+    item_world = multiworld.worlds.get(item.player)
+    if item_world is None or getattr(item_world, 'game', None) != 'Ocarina of Time':
+        return True
+
+    location_world = multiworld.worlds.get(location.player)
+    if not getattr(item, 'dungeonitem', False):
+        return True
+
+    location_dungeon_obj = getattr(location.parent_region, 'dungeon', None)
+    location_dungeon = location_dungeon_obj.name if location_dungeon_obj is not None else None
+    location_is_empty = (
+        location_world is not None
+        and getattr(location_world, 'game', None) == 'Ocarina of Time'
+        and location_world.empty_dungeons_mode != 'none'
+        and location_world.precompleted_dungeons.get(location_dungeon, False)
+    )
+    item_empty_dungeon = (
+        item_world.item_precompleted_dungeon_name(item)
+        if item_world.empty_dungeons_mode != 'none' else None
+    )
+    if location_is_empty:
+        return item.player == location.player and item_empty_dungeon == location_dungeon
+    if item_empty_dungeon is not None:
+        return False
+    return True

@@ -85,7 +85,10 @@ class OOTItem(Item):
 
     @property
     def dungeonitem(self) -> bool:
-        return self.type in ['SmallKey', 'HideoutSmallKey', 'BossKey', 'GanonBossKey', 'Map', 'Compass', 'TCGSmallKey']
+        return self.type in [
+            'SmallKey', 'HideoutSmallKey', 'BossKey', 'GanonBossKey',
+            'Map', 'Compass', 'TCGSmallKey', 'SilverRupee',
+        ]
 
 
 # Progressive: True  -> Advancement
