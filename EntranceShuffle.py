@@ -448,6 +448,18 @@ class EntranceShuffleError(Exception):
     pass
 
 
+def invalidate_age_reachability(state, player):
+    if not hasattr(state, '_oot_stale') or player not in state._oot_stale:
+        return
+    state.child_reachable_regions[player] = set()
+    state.child_blocked_connections[player] = set()
+    state.adult_reachable_regions[player] = set()
+    state.adult_blocked_connections[player] = set()
+    state.day_reachable_regions[player] = set()
+    state.dampe_reachable_regions[player] = set()
+    state._oot_stale[player] = True
+
+
 def shuffle_random_entrances(ootworld):
     multiworld = ootworld.multiworld
     player = ootworld.player
@@ -814,6 +826,8 @@ def validate_world(ootworld, entrance_placed, locations_to_ensure_reachable, all
 
     all_state = all_state_orig.copy()
     none_state = none_state_orig.copy()
+    invalidate_age_reachability(all_state, player)
+    invalidate_age_reachability(none_state, player)
 
     all_state.sweep_for_advancements(locations=ootworld.get_locations())
     none_state.sweep_for_advancements(locations=ootworld.get_locations())
@@ -945,6 +959,7 @@ def change_connections(entrance, target):
     if entrance.reverse and not entrance.multiworld.worlds[entrance.player].decouple_entrances:
         target.replaces.reverse.connect(entrance.reverse.assumed.disconnect())
         target.replaces.reverse.replaces = entrance.reverse
+    invalidate_age_reachability(entrance.multiworld.state, entrance.player)
 
 def restore_connections(entrance, target):
     target.connect(entrance.disconnect())
@@ -952,6 +967,7 @@ def restore_connections(entrance, target):
     if entrance.reverse and not entrance.multiworld.worlds[entrance.player].decouple_entrances:
         entrance.reverse.assumed.connect(target.replaces.reverse.disconnect())
         target.replaces.reverse.replaces = None
+    invalidate_age_reachability(entrance.multiworld.state, entrance.player)
 
 def check_entrances_compatibility(entrance, target, rollbacks):
     # An entrance shouldn't be connected to its own scene
