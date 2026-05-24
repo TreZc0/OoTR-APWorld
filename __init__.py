@@ -1523,6 +1523,10 @@ class OOTWorld(World):
                 self.collect(state, item)
             for item in self.multiworld.itempool:
                 if item.player == self.player:
+                    if not assume_song_of_time and item.name == 'Song of Time':
+                        continue
+                    if not assume_time_travel and item.name == 'Time Travel':
+                        continue
                     self.collect(state, item)
             for loc in self.get_locations():
                 if loc.item is not None and loc.item.player == self.player and loc.item.type == 'DungeonReward':
@@ -1645,6 +1649,11 @@ class OOTWorld(World):
             songs = list(filter(lambda item: item.type == 'Song', self.pre_fill_items))
             for song in songs:
                 self.pre_fill_items.remove(song)
+            song_of_time = next((song for song in songs if song.name == 'Song of Time'), None)
+            song_of_time_opens_door = (
+                song_of_time is not None
+                and self.open_door_of_time not in ('open', 'stones')
+            )
 
             important_warps = (self.shuffle_special_interior_entrances or self.shuffle_overworld_entrances or
                                self.warp_songs or self.spawn_positions)
@@ -1669,9 +1678,18 @@ class OOTWorld(World):
                     self.random.shuffle(song_locations)
                     if self.shuffle_song_items == 'dungeon':
                         song_locations.sort(key=lambda location: 0 if location.name == 'Sheik in Ice Cavern' else 1)
+                    if song_of_time_opens_door:
+                        song_of_time_state = prefill_state(base_prefill_state(
+                            assume_song_of_time=False,
+                            assume_time_travel=False,
+                        ))
+                        fill_restrictive(self.multiworld, song_of_time_state, song_locations[:], [song_of_time],
+                            single_player_placement=True, lock=True, allow_excluded=True)
                     song_state = prefill_state(state)
+                    remaining_songs = [song for song in songs if song.location is None]
+                    remaining_song_locations = [location for location in song_locations if location.item is None]
 
-                    fill_restrictive(self.multiworld, song_state, song_locations[:], songs[:],
+                    fill_restrictive(self.multiworld, song_state, remaining_song_locations, remaining_songs,
                                      single_player_placement=True, lock=True, allow_excluded=True)
                     placed_prefill_items.extend(songs)
                     logger.debug(
@@ -1704,7 +1722,8 @@ class OOTWorld(World):
             def reward_fill_state():
                 reward_state = prefill_state(state)
                 for loc in self.get_locations():
-                    if loc.item is not None and loc.item.player == self.player and loc.item.type != 'DungeonReward':
+                    if (loc.item is not None and loc.item.player == self.player
+                            and loc.item.type != 'DungeonReward'):
                         self.collect(reward_state, loc.item)
                 reward_state.sweep_for_advancements(locations=self.get_locations())
                 return reward_state
