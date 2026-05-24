@@ -311,12 +311,12 @@ async def n64_sync_task(ctx: OoTContext):
                 await asyncio.sleep(1)
         else:
             try:
-                ctx.n64_streams = await asyncio.wait_for(asyncio.open_connection("localhost", 28921), timeout=10)
+                ctx.n64_streams = await asyncio.wait_for(asyncio.open_connection("127.0.0.1", 28921), timeout=10)
                 ctx.n64_status = CONNECTION_TENTATIVE_STATUS
             except TimeoutError:
                 ctx.n64_status = CONNECTION_TIMING_OUT_STATUS
                 continue
-            except ConnectionRefusedError:
+            except (ConnectionRefusedError, OSError):
                 ctx.n64_status = CONNECTION_REFUSED_STATUS
                 await asyncio.sleep(1)
                 continue
