@@ -1,6 +1,7 @@
 from .Items import item_table
 from .Location import DisableType
 from .LocationList import location_groups
+from BaseClasses import LocationProgressType
 from decimal import Decimal, ROUND_HALF_UP
 
 
@@ -675,10 +676,10 @@ def get_pool_core(world):
 
         # Gerudo Fortress freestanding Heart Piece (child-only, normally out of logic)
         elif location.vanilla_item == 'Piece of Heart (Out of Logic)':
-            hideout_er = getattr(world, 'shuffle_hideout_entrances', False)
-            if hideout_er or world.shuffle_gerudo_fortress_heart_piece == 'remove':
+            if world.shuffle_gerudo_fortress_heart_piece == 'remove':
                 shuffle_item = False
                 item = IGNORE_LOCATION
+                location.progress_type = LocationProgressType.EXCLUDED
                 location.show_in_spoiler = False
             elif (world.shuffle_gerudo_fortress_heart_piece == 'shuffle'
                     or world.logic_rules == 'advanced'):

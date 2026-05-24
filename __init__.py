@@ -130,7 +130,8 @@ class OOTCollectionState(metaclass=AutoLogicRegister):
         """Returns True if the player has at least 'count' total hearts."""
         containers = self.count("Heart Container", player)
         pieces = self.count("Piece of Heart", player) + self.count("Piece of Heart (Treasure Chest Game)", player)
-        return 3 + containers + pieces // 4 >= count
+        starting_hearts = self.multiworld.worlds[player].starting_hearts
+        return max(starting_hearts, 3 + containers + pieces // 4) >= count
 
     def has_soul(self, enemy: str, player: int) -> bool:
         """
@@ -1399,15 +1400,21 @@ class OOTWorld(World):
             return
 
         empty_locations = []
-        for location in fill_locations:
+        fill_location_set = set(fill_locations)
+        for location in self.get_locations():
             if location.player != self.player or location.item is not None:
+                dungeon = getattr(location.parent_region, 'dungeon', None)
+                if dungeon is not None and self.precompleted_dungeons.get(dungeon.name, False):
+                    location.progress_type = LocationProgressType.EXCLUDED
                 continue
             dungeon = getattr(location.parent_region, 'dungeon', None)
             if dungeon is None:
                 continue
             dungeon_name = dungeon.name
             if self.precompleted_dungeons.get(dungeon_name, False):
-                empty_locations.append(location)
+                location.progress_type = LocationProgressType.EXCLUDED
+                if location in fill_location_set:
+                    empty_locations.append(location)
 
         if not empty_locations:
             return
@@ -1727,12 +1734,15 @@ class OOTWorld(World):
                         self.multiworld.itempool.pop(index)
                         break
 
-                target_world = self.multiworld.worlds[extracted.player]
-                if hasattr(target_world, 'starting_items'):
-                    target_world.starting_items[extracted.name] += 1
-                self.multiworld.push_precollected(extracted)
+                if extracted.name != 'Nothing':
+                    target_world = self.multiworld.worlds[extracted.player]
+                    if hasattr(target_world, 'starting_items'):
+                        target_world.starting_items[extracted.name] += 1
+                    self.multiworld.push_precollected(extracted)
 
-                if isinstance(extracted, OOTItem) and extracted.type == 'DungeonReward':
+                if (extracted.name != 'Nothing'
+                        and isinstance(extracted, OOTItem)
+                        and extracted.type == 'DungeonReward'):
                     self.hinted_dungeon_reward_locations[extracted.name] = None
 
                 self._grant_rauru_skip_state()
@@ -2169,6 +2179,9 @@ def valid_dungeon_item_location(world: OOTWorld, option: str, dungeon: str, loc:
     # loc.parent_region.dungeon is a Dungeon object (after Dungeon.__init__ runs), so compare .name
     loc_dungeon = loc.parent_region.dungeon
     loc_dungeon_name = loc_dungeon.name if loc_dungeon else None
+    if (loc.type == 'Boss'
+            and world.shuffle_dungeon_rewards in ('dungeon', 'regional', 'any_dungeon', 'overworld')):
+        return False
     if option == 'dungeon':
         return (loc_dungeon_name == dungeon
             and (world.shuffle_song_items != 'dungeon' or loc.name not in dungeon_song_locations))
@@ -2191,7 +2204,7 @@ def valid_dungeon_item_location(world: OOTWorld, option: str, dungeon: str, loc:
 
 
 def valid_reward_location(world: OOTWorld, mode: str, reward_name: str, loc: OOTLocation) -> bool:
-    if loc.type == 'Boss':
+    if loc.type == 'Boss' and not (reward_name == 'Light Medallion' and mode in ('dungeon', 'regional')):
         return False
     if loc.type == 'Shop' and loc.name not in world.shop_prices:
         return False

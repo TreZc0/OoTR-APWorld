@@ -32,7 +32,8 @@ class OOTLogic(LogicMixin):
     def _oot_has_hearts(self, count, player):
         containers = self.count("Heart Container", player)
         pieces = self.count("Piece of Heart", player) + self.count("Piece of Heart (Treasure Chest Game)", player)
-        total_hearts = 3 + containers + int(pieces / 4)
+        starting_hearts = self.multiworld.worlds[player].starting_hearts
+        total_hearts = max(starting_hearts, 3 + containers + int(pieces / 4))
         return total_hearts >= count
 
     def _oot_has_bottle(self, player): 
