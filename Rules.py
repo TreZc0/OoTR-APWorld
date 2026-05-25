@@ -5,7 +5,8 @@ import typing
 
 from .Regions import TimeOfDay
 from .DungeonList import dungeon_table
-from .Items import oot_is_item_of_type
+from .Hints import HintArea, HintAreaNotFound
+from .Items import REWARD_COLORS, REWARD_TO_DUNGEON, oot_is_item_of_type
 from .LocationList import dungeon_song_locations
 
 from BaseClasses import CollectionState, MultiWorld
@@ -192,9 +193,8 @@ def set_rules(ootworld):
     # ganon can only carry triforce
     multiworld.get_location('Ganon', player).item_rule = lambda item: item.name == 'Triforce'
 
-    if ootworld.empty_dungeons_mode != 'none':
-        for location in multiworld.get_locations(player):
-            add_item_rule(location, lambda item, loc=location: valid_oot_item_placement(loc, item))
+    for location in multiworld.get_locations(player):
+        add_item_rule(location, lambda item, loc=location: valid_oot_item_placement(loc, item))
 
     # is_child = ootworld.parser.parse_rule('is_child')
     guarantee_hint = ootworld.parser.parse_rule('guarantee_hint')
@@ -382,9 +382,6 @@ def valid_oot_item_placement(location, item) -> bool:
         return True
 
     location_world = multiworld.worlds.get(location.player)
-    if not getattr(item, 'dungeonitem', False):
-        return True
-
     location_dungeon_obj = getattr(location.parent_region, 'dungeon', None)
     location_dungeon = location_dungeon_obj.name if location_dungeon_obj is not None else None
     location_is_empty = (
@@ -398,7 +395,110 @@ def valid_oot_item_placement(location, item) -> bool:
         if item_world.empty_dungeons_mode != 'none' else None
     )
     if location_is_empty:
-        return item.player == location.player and item_empty_dungeon == location_dungeon
+        return (
+            item.player == location.player
+            and item_empty_dungeon == location_dungeon
+        )
     if item_empty_dungeon is not None:
         return False
+
+    shuffle_setting = oot_item_shuffle_setting(item_world, item)
+    if shuffle_setting is None or shuffle_setting in {'keysanity', 'anywhere'}:
+        return True
+    if item.type == 'DungeonReward' and shuffle_setting in {'vanilla', 'reward'}:
+        return True
+    if item.type != 'DungeonReward' and shuffle_setting in {'vanilla', 'remove'}:
+        return True
+
+    # Restricted non-keysanity OoT items are local in upstream and in
+    # generate_early(). Enforce that here too so AP's main fill cannot bypass
+    # the local item option with a cross-world placement.
+    if item.player != location.player:
+        return False
+
+    if location.type == 'Shop' and location.name not in item_world.shop_prices:
+        return False
+    if item_world.shuffle_song_items == 'song' and location.type == 'Song':
+        return False
+    if item_world.shuffle_song_items == 'dungeon' and location.name in dungeon_song_locations:
+        return False
+
+    location_is_dungeon = location_dungeon_obj is not None or location.parent_region.is_boss_room
+
+    if item.type == 'DungeonReward':
+        if location.type == 'Boss' and not (item.name == 'Light Medallion' and shuffle_setting in {'dungeon', 'regional'}):
+            return False
+        if shuffle_setting == 'dungeon':
+            source_dungeon = REWARD_TO_DUNGEON.get(item.name)
+            if source_dungeon is None:
+                return location_hint_area(location) == HintArea.TEMPLE_OF_TIME
+            return location_dungeon == source_dungeon
+        if shuffle_setting == 'regional':
+            hint_area = location_hint_area(location)
+            return hint_area is not None and hint_area.color == REWARD_COLORS[item.name]
+        if shuffle_setting == 'any_dungeon':
+            return location_is_dungeon
+        if shuffle_setting == 'overworld':
+            return not location_is_dungeon
+        return True
+
+    if not oot_is_restricted_dungeon_item_type(item):
+        return True
+
+    item_dungeon = item_world.item_dungeon_name_from_name(item.name)
+    if item.type == 'HideoutSmallKey':
+        item_dungeon = 'Thieves Hideout'
+    elif item.type == 'GanonBossKey':
+        item_dungeon = 'Ganons Castle'
+    elif item.type == 'TCGSmallKey':
+        item_dungeon = 'Treasure Chest Game'
+
+    if location.type == 'Boss' and item_world.shuffle_dungeon_rewards in {'dungeon', 'regional', 'any_dungeon', 'overworld'}:
+        return False
+    if shuffle_setting == 'dungeon':
+        return location_dungeon == item_dungeon
+    if shuffle_setting == 'any_dungeon':
+        return location_is_dungeon
+    if shuffle_setting == 'overworld':
+        return not location_is_dungeon
+    if shuffle_setting == 'regional':
+        hint_area = location_hint_area(location)
+        dungeon_hint_area = HintArea.for_dungeon(item_dungeon)
+        return hint_area is not None and dungeon_hint_area is not None and hint_area.color == dungeon_hint_area.color
     return True
+
+
+def oot_is_restricted_dungeon_item_type(item) -> bool:
+    return item.type in {
+        'Map', 'Compass', 'SmallKey', 'HideoutSmallKey', 'TCGSmallKey',
+        'BossKey', 'GanonBossKey', 'SilverRupee',
+    }
+
+
+def oot_item_shuffle_setting(world, item):
+    if item.type == 'Map':
+        return world.shuffle_map
+    if item.type == 'Compass':
+        return world.shuffle_compass
+    if item.type == 'SmallKey':
+        return world.shuffle_smallkeys
+    if item.type == 'HideoutSmallKey':
+        return world.shuffle_hideoutkeys
+    if item.type == 'TCGSmallKey':
+        return world.shuffle_tcgkeys
+    if item.type == 'BossKey':
+        return world.shuffle_bosskeys
+    if item.type == 'GanonBossKey':
+        return world.shuffle_ganon_bosskey
+    if item.type == 'SilverRupee':
+        return world.shuffle_silver_rupees
+    if item.type == 'DungeonReward':
+        return world.shuffle_dungeon_rewards
+    return None
+
+
+def location_hint_area(location):
+    try:
+        return HintArea.at(location)
+    except HintAreaNotFound:
+        return None
