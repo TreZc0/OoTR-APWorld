@@ -1999,6 +1999,31 @@ class OOTWorld(World):
             "random_starting_items_exclude", "adult_trade_start", "plando_connections"
             )
         )
+
+        if not self.multiworld.is_race:
+            dungeon_reward_locations = {}
+            for reward_name, location in self.hinted_dungeon_reward_locations.items():
+                if location is None:
+                    dungeon_reward_locations[reward_name] = None
+                elif location.player != self.player:
+                    dungeon_reward_locations[reward_name] = "Another World"
+                else:
+                    try:
+                        dungeon_reward_locations[reward_name] = HintArea.at(location).short_name
+                    except Exception:
+                        dungeon_reward_locations[reward_name] = None
+            slot_data['dungeon_reward_locations'] = dungeon_reward_locations
+
+            dungeon_bosses = {}
+            for entrance in (self.get_shufflable_entrances(type='ChildBoss', only_primary=True) +
+                             self.get_shufflable_entrances(type='AdultBoss', only_primary=True)):
+                try:
+                    dungeon_name = HintArea.at(entrance.parent_region).dungeon_name
+                except Exception:
+                    continue
+                dungeon_bosses[dungeon_name] = entrance.connected_region.name
+            slot_data['dungeon_bosses'] = dungeon_bosses
+
         return slot_data
 
 
