@@ -468,15 +468,16 @@ class HintArea(Enum):
             else:
                 parent_region = current_spot.parent_region
 
-            if parent_region.hint and (original_parent.name == 'Root' or parent_region.name != 'Root'):
-                if use_alt_hint and parent_region.alt_hint:
+            parent_hint = getattr(parent_region, 'hint', None)
+            if parent_hint and (original_parent.name == 'Root' or parent_region.name != 'Root'):
+                if use_alt_hint and getattr(parent_region, 'alt_hint', None):
                     return parent_region.alt_hint
-                return parent_region.hint
+                return parent_hint
 
             for entrance in parent_region.entrances:
                 if entrance not in already_checked:
                     # prioritize two-way entrances
-                    if entrance.type in ('OverworldOneWay', 'OwlDrop', 'Spawn', 'WarpSong'):
+                    if getattr(entrance, 'type', None) in ('OverworldOneWay', 'OwlDrop', 'Spawn', 'WarpSong'):
                         fallback_spot_queue.append(entrance)
                     else:
                         spot_queue.append(entrance)

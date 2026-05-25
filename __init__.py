@@ -1528,9 +1528,10 @@ class OOTWorld(World):
                     if not assume_time_travel and item.name == 'Time Travel':
                         continue
                     self.collect(state, item)
-            for loc in self.get_locations():
-                if loc.item is not None and loc.item.player == self.player and loc.item.type == 'DungeonReward':
-                    self.collect(state, loc.item)
+            if assume_song_of_time and assume_time_travel:
+                for loc in self.get_locations():
+                    if loc.item is not None and loc.item.player == self.player and loc.item.type == 'DungeonReward':
+                        self.collect(state, loc.item)
 
             # Some progression is intentionally not represented in the item pool.
             if self.scarecrow_behavior == 'free':
