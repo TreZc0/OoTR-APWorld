@@ -246,6 +246,10 @@ def _scrub(emu: EmuLoaderClient, scene: int, bit: int) -> bool:
     return _sc(emu, scene, bit, 0x10)
 
 
+def _bombchu_bowling(emu: EmuLoaderClient, prize_index: int) -> bool:
+    return _sc(emu, 0x4B, prize_index, 0x10)
+
+
 def _cow(emu: EmuLoaderClient, st: OoTBridgeState, scene: int, bit: int) -> bool:
     return _sc(emu, scene, bit, 0xC) or _check_temp_context(st, scene, 0x00, bit - 0x03)
 
@@ -501,8 +505,8 @@ SPECIAL_LOCATION_CHECKS: Dict[str, Callable[[EmuLoaderClient, OoTBridgeState], b
     "LLR Stables Right Cow": lambda emu, st: _cow(emu, st, 0x36, 0x19),
     "Gift from Sages": lambda emu, st: _check_temp_context(st, 0xFF, 0x05, 0x03),
     "Market Shooting Gallery Reward": lambda emu, st: _igi(emu, 0x0, 0x5),
-    "Market Bombchu Bowling First Prize": lambda emu, st: _igi(emu, 0x3, 0x1),
-    "Market Bombchu Bowling Second Prize": lambda emu, st: _igi(emu, 0x3, 0x2),
+    "Market Bombchu Bowling First Prize": lambda emu, st: _bombchu_bowling(emu, 0),
+    "Market Bombchu Bowling Second Prize": lambda emu, st: _bombchu_bowling(emu, 1),
     "Market Treasure Chest Game Salesman": lambda emu, st: _tcg_salesman(emu, st),
     "Market Treasure Chest Game Reward": lambda emu, st: _igi(emu, 0x2, 0x3) or _chest(emu, st, 0x10, 0x0A),
     "Market Lost Dog": lambda emu, st: _inf(emu, 0x33, 0x1),
