@@ -395,10 +395,13 @@ def valid_oot_item_placement(location, item) -> bool:
         if item_world.empty_dungeons_mode != 'none' else None
     )
     if location_is_empty:
-        return (
-            item.player == location.player
-            and item_empty_dungeon == location_dungeon
-        )
+        if item.player != location.player:
+            return False
+        if item_empty_dungeon == location_dungeon:
+            return True
+        if item_empty_dungeon is not None or getattr(item, 'dungeonitem', False):
+            return False
+        return location_world.accessibility == 'full' and not item.advancement
     if item_empty_dungeon is not None:
         return False
 
