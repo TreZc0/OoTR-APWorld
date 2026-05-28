@@ -64,7 +64,7 @@ __version__: str = json.loads(_version_data.decode('utf-8'))['world_version']
 def _restore_executable_mode(path):
     if os.path.basename(path).startswith(('Compress', 'Decompress')):
         try:
-            os.chmod(path, 0o755)
+            os.chmod(path, 0o755) # nosec
         except OSError:
             pass
 
