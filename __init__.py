@@ -1492,10 +1492,25 @@ class OOTWorld(World):
 
         placed_prefill_items = []
 
-        def prefill_state(base_state, excluded_items=None):
+        def prefill_state(base_state, excluded_items=None, collect_placed_items=True):
             excluded_item_ids = {id(item) for item in excluded_items or ()}
             state = base_state.copy()
+            # Trial states may exclude keys/songs from the copied base state. OoT's
+            # age/time reachability caches are monotonic, so clear them before
+            # checking candidate locations or a stricter trial can inherit access
+            # from a less restricted one.
+            state.child_reachable_regions[self.player] = set()
+            state.adult_reachable_regions[self.player] = set()
+            state.child_blocked_connections[self.player] = set()
+            state.adult_blocked_connections[self.player] = set()
+            state.day_reachable_regions[self.player] = set()
+            state.dampe_reachable_regions[self.player] = set()
+            state._oot_stale[self.player] = True
             for item in placed_prefill_items:
+                if id(item) in excluded_item_ids:
+                    continue
+                if not collect_placed_items:
+                    continue
                 self.collect(state, item)
             for item in self.get_pre_fill_items():
                 if id(item) in excluded_item_ids:
@@ -1564,7 +1579,11 @@ class OOTWorld(World):
             unplaced_items = items[:]
             while unplaced_items:
                 item = unplaced_items.pop()
-                placement_state = prefill_state(base_state, excluded_items=unplaced_items + [item])
+                placement_state = prefill_state(
+                    base_state,
+                    excluded_items=unplaced_items + [item],
+                    collect_placed_items=fill_stage != 'SmallKey',
+                )
                 self.random.shuffle(locations)
                 for location_index, location in enumerate(locations):
                     if location.can_fill(placement_state, item, True):
