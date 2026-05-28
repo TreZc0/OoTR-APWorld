@@ -255,15 +255,13 @@ class OOTWorld(World):
     topology_present: bool = True
     item_name_to_id = {item_name: oot_data_to_ap_id(data, False) for item_name, data in item_table.items() if
                        oot_data_to_ap_id(data, False) is not None and item_name not in {
-                        'Keaton Mask', 'Skull Mask', 'Spooky Mask',
-                        'Mask of Truth', 'Goron Mask', 'Zora Mask', 'Gerudo Mask',
                         'Buy Magic Bean', 'Milk',
                         'Small Key', 'Map', 'Compass', 'Boss Key',
                        }}  # These are items which aren't used, but have get-item values
     location_name_to_id = location_name_to_id
     web = OOTWeb()
 
-    required_client_version = (0, 4, 0)
+    required_client_version = (0, 6, 4)
 
     item_name_groups = {
         # internal groups
