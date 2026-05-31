@@ -1292,7 +1292,49 @@ def natjoin(elements: Iterable[str], conjunction: str = 'and') -> Optional[str]:
         return f'{", ".join(rest)}, {conjunction} {last}'
 
 
+def populate_misc_hint_data(worlds: list['OOTWorld']) -> None:
+    for world in worlds:
+        if not hasattr(world, 'misc_hint_item_locations'):
+            world.misc_hint_item_locations = {}
+        if not hasattr(world, 'misc_hint_location_items'):
+            world.misc_hint_location_items = {}
+        if not hasattr(world, 'misc_hint_items'):
+            world.misc_hint_items = {
+                hint_type: world.hint_dist_user.get('misc_hint_items', {}).get(hint_type, data['default_item'])
+                for hint_type, data in misc_item_hint_table.items()
+            }
+        if not hasattr(world, 'misc_hint_locations'):
+            world.misc_hint_locations = {
+                hint_type: world.hint_dist_user.get('misc_hint_locations', {}).get(hint_type, data['item_location'])
+                for hint_type, data in misc_location_hint_table.items()
+            }
+
+    oot_worlds_by_player = {world.player: world for world in worlds}
+    for world in worlds:
+        for location in world.get_locations():
+            if location.item is None:
+                continue
+
+            item_world = oot_worlds_by_player.get(location.item.player)
+            if item_world is not None:
+                for hint_type, item_name in item_world.misc_hint_items.items():
+                    if (
+                        hint_type not in item_world.misc_hint_item_locations
+                        and location.item.name == item_name
+                    ):
+                        item_world.misc_hint_item_locations[hint_type] = location
+
+            for hint_type, location_name in world.misc_hint_locations.items():
+                if (
+                    hint_type not in world.misc_hint_location_items
+                    and location.name == location_name
+                ):
+                    world.misc_hint_location_items[hint_type] = location.item
+
+
 def build_gossip_hints(worlds: list['OOTWorld']) -> None:
+    populate_misc_hint_data(worlds)
+
     checked_locations = dict()
     # Add misc. item hint locations to "checked" locations if the respective hint is reachable without the hinted item.
     for world in worlds:

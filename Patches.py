@@ -15,7 +15,7 @@ from .LocationList import business_scrubs
 from .Hints import writeGossipStoneHints, buildAltarHints, \
         buildGanonText, getSimpleHintNoPrefix, HintArea, \
         buildMiscItemHints, buildMiscLocationHints, buildMiscDualHints, get_item_hint_text
-from .Utils import data_path, encode_oot_player_name
+from .Utils import data_path, encode_oot_player_name, __version_full__ as oot_version_full
 try:
     from Utils import instance_name as apname
 except ImportError:
@@ -413,7 +413,7 @@ def patch_rom(world, rom):
         return txt
 
     line_len = 21
-    version_str = "v " + world.world_version.as_simple_string()
+    version_str = "v" + oot_version_full
     rom.write_bytes(rom.sym('VERSION_STRING_TXT'), makebytes(version_str, 25))
 
     if world.multiworld.players > 1:
@@ -2723,7 +2723,8 @@ def place_shop_items(rom, world, shop_items, messages, locations, init_shop_id=F
         ):
             custom_shop_item = False
             shop_objs.add(location.item.special['object'])
-            rom.write_int16(location.address1, location.item.index)
+            if location.type == 'Shop':
+                rom.write_int16(location.address1, location.item.index)
         else:
             if location.item.trap:
                 item_display = world.trap_appearances[location.address]
