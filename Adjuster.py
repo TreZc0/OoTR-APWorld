@@ -9,12 +9,13 @@ from BaseClasses import MultiWorld
 from Options import Choice, Range, Toggle
 from . import OOTWorld, launch_rom as launch_oot_rom
 from .Cosmetics import get_voice_choices, patch_cosmetics, patch_voices
+from .MusicHelpers import find_mm_audiobin_path
 from .Options import (cosmetic_options, sfx_options, voice_options,
     DpadDungeonMenu, SpeedupMusicForLastTriforcePiece, SlowdownMusicWhenLowhp,
     UninvertYAxisInFirstPersonCamera, InputViewer, DisableBattleMusic, CreditsMusic)
 from .Rom import Rom, compress_rom_file
 from .N64Patch import apply_patch_file
-from .Utils import __version__ as oot_version, data_path
+from .Utils import __version__ as oot_version
 from Utils import local_path, user_path, persistent_store, get_adjuster_settings_no_defaults
 
 logger = logging.getLogger('OoTAdjuster')
@@ -27,24 +28,19 @@ def get_mmrs_missing_audiobin_warning(args) -> str | None:
     if getattr(args, 'background_music', 'normal') == 'normal' and getattr(args, 'fanfares', 'normal') == 'normal':
         return None
 
-    mm_audiobin_path = data_path('Music', 'MM.audiobin')
-    if os.path.exists(mm_audiobin_path):
+    music_dir = getattr(args, 'music_dir', None) or None
+    if not music_dir or not os.path.isdir(music_dir):
         return None
 
-    scan_dirs = [data_path('Music')]
-    music_dir = getattr(args, 'music_dir', None) or None
-    if music_dir and os.path.isdir(music_dir):
-        scan_dirs.append(music_dir)
+    if find_mm_audiobin_path(music_dir):
+        return None
 
-    for scan_dir in scan_dirs:
-        if not os.path.isdir(scan_dir):
-            continue
-        for _dirpath, _dirnames, filenames in os.walk(scan_dir, followlinks=True):
-            if any(fname.lower().endswith('.mmrs') for fname in filenames):
-                return (
-                    ".mmrs custom music files were ignored because MM.audiobin was not found. "
-                    f"Place MM.audiobin in {mm_audiobin_path} to enable .mmrs tracks."
-                )
+    for _dirpath, _dirnames, filenames in os.walk(music_dir, followlinks=True):
+        if any(fname.lower().endswith('.mmrs') for fname in filenames):
+            return (
+                ".mmrs custom music files were ignored because MM.audiobin was not found. "
+                f"Place MM.audiobin in {music_dir} to enable .mmrs tracks from that folder."
+            )
     return None
 
 

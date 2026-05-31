@@ -851,7 +851,6 @@ def validate_world(ootworld, entrance_placed, locations_to_ensure_reachable, all
     ADULT_FORBIDDEN = [
         'HC Great Fairy Fountain -> Castle Grounds',
         'HC Storms Grotto -> Castle Grounds',
-        'Market -> Market Bombchu Bowling',
         'Bongo Bongo Boss Room -> Shadow Temple Before Boss',
         'Twinrova Boss Room -> Spirit Temple Before Boss',
     ]

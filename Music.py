@@ -7,7 +7,7 @@ from typing import Optional
 from .Audiobank import Audiobin, AudioBank, Sample, Instrument, Drum, SFX
 from .Sequence import Sequence, SequenceGame
 from .Utils import data_path
-from .MusicHelpers import process_sequence_ootrs, process_sequence_mmr_zseq, process_sequence_mmrs
+from .MusicHelpers import find_mm_audiobin_path, process_sequence_ootrs, process_sequence_mmr_zseq, process_sequence_mmrs
 
 # DMA table byte offset for the audioseq file (entry index 4, DMADATA_START 0x7430 + 4*0x10)
 AUDIOSEQ_DMADATA_OFFSET = 0x7470
@@ -167,6 +167,7 @@ def process_sequences(rom, ids, seq_type: str = 'bgm',
         scan_dirs.append(music_dir)
 
     for scan_dir in scan_dirs:
+        mm_audiobin_path = find_mm_audiobin_path(scan_dir)
         for dirpath, _, filenames in os.walk(scan_dir, followlinks=True):
             for fname in filenames:
                 if fname in seq_exclusion_list:
@@ -177,9 +178,11 @@ def process_sequences(rom, ids, seq_type: str = 'bgm',
                     if fname.lower().endswith('.ootrs'):
                         seq = process_sequence_ootrs(filepath, fname, seq_type, include_custom_audiobanks, {})
                     elif fname.lower().endswith('.zseq'):
-                        seq = process_sequence_mmr_zseq(filepath, fname, seq_type, include_custom_audiobanks, {})
+                        seq = process_sequence_mmr_zseq(filepath, fname, seq_type, include_custom_audiobanks, {},
+                                                        mm_audiobin_path)
                     elif fname.lower().endswith('.mmrs'):
-                        seq = process_sequence_mmrs(filepath, fname, seq_type, include_custom_audiobanks, {})
+                        seq = process_sequence_mmrs(filepath, fname, seq_type, include_custom_audiobanks, {},
+                                                    mm_audiobin_path)
                     if seq and seq.cosmetic_name not in disabled_source_sequences:
                         sequences[seq.cosmetic_name] = seq
                 except Exception as e:
@@ -385,7 +388,9 @@ def rebuild_sequences(rom, sequences: list, symbols: Optional[dict] = None) -> N
     for i in range(0x6E):
         j = replacement_dict.get(i if new_sequences[i].size else new_sequences[i].address, None)
         if j and j.game == SequenceGame.MM:
-            with zipfile.ZipFile(os.path.join(data_path(), 'Music', 'MM.audiobin')) as mm_audiobin_zip:
+            if not j.mm_audiobin_path or not os.path.exists(j.mm_audiobin_path):
+                raise FileNotFoundError(".MMRS/.zseq sequence found but missing MM.audiobin")
+            with zipfile.ZipFile(j.mm_audiobin_path) as mm_audiobin_zip:
                 mm_audiobank = bytearray(mm_audiobin_zip.read("Audiobank"))
                 mm_audiobank_index = bytearray(mm_audiobin_zip.read("Audiobank_index"))
                 mm_audiotable = bytearray(mm_audiobin_zip.read("Audiotable"))

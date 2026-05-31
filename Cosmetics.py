@@ -819,9 +819,6 @@ def _patch_voice_bin(rom, sfxid, binsfx, soundbank_entries, source_name):
         logger.error(f"Voice patch skipped unknown SFX file {source_name}.")
         return
     length = soundbank_entries[sfxid]["length"]
-    if len(binsfx) > length:
-        logger.error(f"Voice patch skipped oversized SFX file {source_name}.")
-        return
     rom.write_bytes(soundbank_entries[sfxid]["romoffset"], binsfx.ljust(length, b'\0'))
 
 

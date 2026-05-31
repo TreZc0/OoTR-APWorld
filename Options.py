@@ -1983,6 +1983,7 @@ class OoTOptions(PerGameCommonOptions):
 
 
 oot_option_groups: typing.List[OptionGroup] = [
+    OptionGroup("Logic", [Logic, NightTokens, LogicTricks, AdvancedAllowedTricks]),
     OptionGroup("Open", [option for option in open_options.values()]),
     OptionGroup("World", [*[option for option in world_options.values()],
                 *[option for option in bridge_options.values()]]),
