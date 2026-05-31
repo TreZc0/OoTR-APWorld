@@ -14,13 +14,38 @@ from .Options import (cosmetic_options, sfx_options, voice_options,
     UninvertYAxisInFirstPersonCamera, InputViewer, DisableBattleMusic, CreditsMusic)
 from .Rom import Rom, compress_rom_file
 from .N64Patch import apply_patch_file
-from .Utils import __version__ as oot_version
+from .Utils import __version__ as oot_version, data_path
 from Utils import local_path, user_path, persistent_store, get_adjuster_settings_no_defaults
 
 logger = logging.getLogger('OoTAdjuster')
 
 def launch_rom(path: str) -> None:
     launch_oot_rom(path, logger)
+
+
+def get_mmrs_missing_audiobin_warning(args) -> str | None:
+    if getattr(args, 'background_music', 'normal') == 'normal' and getattr(args, 'fanfares', 'normal') == 'normal':
+        return None
+
+    mm_audiobin_path = data_path('Music', 'MM.audiobin')
+    if os.path.exists(mm_audiobin_path):
+        return None
+
+    scan_dirs = [data_path('Music')]
+    music_dir = getattr(args, 'music_dir', None) or None
+    if music_dir and os.path.isdir(music_dir):
+        scan_dirs.append(music_dir)
+
+    for scan_dir in scan_dirs:
+        if not os.path.isdir(scan_dir):
+            continue
+        for _dirpath, _dirnames, filenames in os.walk(scan_dir, followlinks=True):
+            if any(fname.lower().endswith('.mmrs') for fname in filenames):
+                return (
+                    ".mmrs custom music files were ignored because MM.audiobin was not found. "
+                    f"Place MM.audiobin in {mm_audiobin_path} to enable .mmrs tracks."
+                )
+    return None
 
 
 def get_argparser():
@@ -399,6 +424,9 @@ def adjustGUI():
                     save_adjuster_settings(guiargs)
                     from worlds.LauncherComponents import launch_subprocess
                     from .client import main as client_main
+                    warning = get_mmrs_missing_audiobin_warning(guiargs)
+                    if warning:
+                        messagebox.showwarning(title="Custom music skipped", message=warning)
                     launch_rom(path)
                     launch_subprocess(client_main, name="OoTClient")
                     messagebox.showinfo(title="Success", message=f"Rom adjusted to {path}")
@@ -440,6 +468,9 @@ def adjust(args, status_callback=None):
 
     # Create a fake multiworld and OOTWorld to use as a base
     update_status("Preparing options...")
+    warning = get_mmrs_missing_audiobin_warning(args)
+    if warning:
+        logger.warning(warning)
     multiworld = MultiWorld(1)
     ootworld = OOTWorld(multiworld, 1)
     # Set options in the fake OOTWorld
