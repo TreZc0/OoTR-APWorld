@@ -1537,6 +1537,18 @@ def patch_rom(world, rom):
     buildMiscLocationHints(world, messages)
     buildMiscDualHints(world, messages)
 
+    # Make the cursed Skulltula House residents descend immediately so their
+    # reward hints can be read before reaching the matching token counts.
+    if any(hint_type in world.misc_hints for hint_type in (
+        '10_skulltulas',
+        '20_skulltulas',
+        '30_skulltulas',
+        '40_skulltulas',
+        '50_skulltulas',
+        '100_skulltulas',
+    )):
+        rom.write_int16(0xEA185A, 0x44C8)
+
     # Patch freestanding items
     if world.shuffle_freestanding_items:
     # Get freestanding item locations

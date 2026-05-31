@@ -13,7 +13,7 @@ from .Location import OOTLocation, LocationFactory, location_name_to_id, build_l
 from .Entrance import OOTEntrance
 from .EntranceShuffle import shuffle_random_entrances, entrance_shuffle_table, EntranceShuffleError
 from .HintList import getRequiredHints
-from .Hints import HintArea, HintAreaNotFound, hint_dist_keys, get_hint_area, buildWorldGossipHints
+from .Hints import HintArea, HintAreaNotFound, hint_dist_keys, get_hint_area, buildWorldGossipHints, populate_misc_hint_data
 from .Items import OOTItem, item_table, oot_data_to_ap_id, oot_is_item_of_type, REWARD_COLORS, REWARD_TO_DUNGEON
 from .ItemPool import generate_itempool, get_junk_item, get_junk_pool
 from .Regions import OOTRegion, TimeOfDay
@@ -1890,7 +1890,7 @@ class OOTWorld(World):
             for entrance in all_entrances:
                 self.multiworld.spoiler.set_entrance(entrance, entrance.replaces, 'entrance', self.player)
 
-        if self.hints != 'none':
+        if self.hints != 'none' or self.misc_hints:
             self.hint_data_available.wait()
 
         with i_o_limiter:
@@ -1929,8 +1929,10 @@ class OOTWorld(World):
     # Gathers hint data for OoT. Loops over all world locations for woth, barren, and major item locations.
     @classmethod
     def stage_generate_output(cls, multiworld: MultiWorld, output_directory: str):
+        oot_worlds = list(multiworld.get_game_worlds(cls.game))
+
         def hint_type_players(hint_type: str) -> set:
-            return {autoworld.player for autoworld in multiworld.get_game_worlds("Ocarina of Time")
+            return {autoworld.player for autoworld in oot_worlds
                     if autoworld.hints != 'none' 
                     and autoworld.hint_dist_user['distribution'][hint_type]['copies'] > 0
                     and (autoworld.hint_dist_user['distribution'][hint_type]['fixed'] > 0 
@@ -1959,7 +1961,7 @@ class OOTWorld(World):
                                 or (loc.player in item_hint_players and loc.name in multiworld.worlds[loc.player].added_hint_types['item'])):
                         autoworld.major_item_locations.append(loc)
 
-                    if loc.game == "Ocarina of Time" and loc.item.code and (not loc.locked or
+                    if loc.game == cls.game and loc.item.code and (not loc.locked or
                         (oot_is_item_of_type(loc.item, 'Song') or
                             (oot_is_item_of_type(loc.item, 'SmallKey')         and multiworld.worlds[loc.player].shuffle_smallkeys     in ('overworld', 'any_dungeon', 'regional')) or
                             (oot_is_item_of_type(loc.item, 'HideoutSmallKey')  and multiworld.worlds[loc.player].shuffle_hideoutkeys   in ('overworld', 'any_dungeon', 'regional')) or
@@ -1998,10 +2000,11 @@ class OOTWorld(World):
             for player in barren_hint_players:
                 multiworld.worlds[player].empty_areas = {region: info for (region, info) in items_by_region[player].items()
                                                     if info['is_barren']}
+            populate_misc_hint_data(oot_worlds)
         except Exception as e:
             raise e
         finally:
-            for autoworld in multiworld.get_game_worlds("Ocarina of Time"):
+            for autoworld in oot_worlds:
                 autoworld.hint_data_available.set()
 
 
