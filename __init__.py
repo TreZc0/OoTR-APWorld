@@ -1530,8 +1530,6 @@ class OOTWorld(World):
             # During prefill we assume every non-prefill item for this player could be found eventually.
             # Use the MultiWorld itempool here so rewards shuffled out of boss locations are also included.
             state = CollectionState(self.multiworld)
-            for item in self.multiworld.precollected_items[self.player]:
-                self.collect(state, item)
             for item in self.multiworld.itempool:
                 if item.player == self.player:
                     if not assume_song_of_time and item.name == 'Song of Time':
@@ -1572,29 +1570,6 @@ class OOTWorld(World):
                     return
             raise ValueError(f"Could not remove prefill item by identity: {item}")
 
-        def place_reachable_prefill_items(locations, items, fill_stage, dungeon_name, base_state=None):
-            base_state = base_state or state
-            unplaced_items = items[:]
-            while unplaced_items:
-                item = unplaced_items.pop()
-                placement_state = prefill_state(
-                    base_state,
-                    excluded_items=unplaced_items + [item],
-                    collect_placed_items=fill_stage != 'SmallKey',
-                )
-                self.random.shuffle(locations)
-                for location_index, location in enumerate(locations):
-                    if location.can_fill(placement_state, item, True):
-                        locations.pop(location_index)
-                        self.multiworld.push_item(location, item, collect=False)
-                        location.locked = True
-                        placed_prefill_items.append(item)
-                        break
-                else:
-                    raise FillError(
-                        f"OoT (Player {self.player}): no reachable location for {item.name} "
-                        f"during {fill_stage} prefill for {dungeon_name}.")
-
         # Pre-completed dungeons are intentionally empty of progression. Keep
         # their own dungeon items inside them before generic empty-dungeon fill.
         precompleted_dungeon_items = [
@@ -1625,7 +1600,7 @@ class OOTWorld(World):
 
         # Place dungeon items
         special_fill_types = [
-            'GanonBossKey', 'BossKey', 'SmallKey', 'HideoutSmallKey',
+            'SmallKey', 'GanonBossKey', 'BossKey', 'HideoutSmallKey',
             'Map', 'Compass', 'SilverRupee',
         ]
         type_to_setting = {
@@ -1673,12 +1648,9 @@ class OOTWorld(World):
                         remove_prefill_item(item)
                     placement_items = dungeon_items[:]
                     self.random.shuffle(locations)
-                    if fill_stage == 'SmallKey' and getattr(self, type_to_setting[fill_stage]) == 'dungeon':
-                        place_reachable_prefill_items(locations, placement_items, fill_stage, dungeon_name)
-                    else:
-                        fill_restrictive(self.multiworld, prefill_state(state), locations, placement_items[:],
-                            single_player_placement=True, lock=True, allow_excluded=True,
-                            on_place=lambda loc: placed_prefill_items.append(loc.item))
+                    fill_restrictive(self.multiworld, prefill_state(state), locations, placement_items[:],
+                        single_player_placement=True, lock=True, allow_excluded=True,
+                        on_place=lambda loc: placed_prefill_items.append(loc.item))
 
         # Place songs
         # 15 built-in retries because this section can fail sometimes
@@ -2295,8 +2267,6 @@ class OOTWorld(World):
     # Entrance validation still needs the complete age-travel assumption.
     def get_state_with_complete_itempool(self):
         all_state = CollectionState(self.multiworld)
-        for item in self.multiworld.precollected_items[self.player]:
-            self.collect(all_state, item)
         for item in self.itempool + self.pre_fill_items:
             self.multiworld.worlds[item.player].collect(all_state, item)
         for loc in self.get_locations():
