@@ -907,12 +907,7 @@ async def _protocol_cycle(
     include_full_state: bool,
     force_resync: bool,
 ) -> None:
-    """One send-then-receive exchange with the AP client."""
-    payload = _build_state(emu, st, include_full_state, force_resync)
-    line    = json.dumps(payload) + "\n"
-    writer.write(line.encode())
-    await writer.drain()
-
+    """One receive-then-send exchange with the AP client."""
     try:
         raw = await asyncio.wait_for(reader.readline(), timeout=0.1)
     except asyncio.TimeoutError:
@@ -924,6 +919,11 @@ async def _protocol_cycle(
         _process_block(emu, st, block)
     except json.JSONDecodeError:
         logger.warning("OoT Bridge: could not decode client message")
+
+    payload = _build_state(emu, st, include_full_state, force_resync)
+    line    = json.dumps(payload) + "\n"
+    writer.write(line.encode())
+    await writer.drain()
 
 
 async def _client_session(
