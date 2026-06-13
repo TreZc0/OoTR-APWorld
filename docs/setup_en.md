@@ -3,7 +3,7 @@
 ## Required Software
 
 - An Emulator of choice
-  - [BizHawk](https://tasvideos.org/BizHawk/ReleaseHistory) (v2.10+)
+  - [BizHawk](https://tasvideos.org/BizHawk/ReleaseHistory) (v2.10+) (not on Linux)
   - [Project 64](https://www.pj64-emu.com/windows-downloads)
   - [simple64](https://simple64.github.io/)
   - [Rosalie's Mupen GUI](https://github.com/Rosalie241/RMG)
