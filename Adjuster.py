@@ -2,7 +2,6 @@ import tkinter as tk
 import argparse
 import logging
 import os
-import zipfile
 from itertools import chain
 
 from BaseClasses import MultiWorld
@@ -15,7 +14,6 @@ from .Options import (cosmetic_options, sfx_options, voice_options,
     DpadDungeonMenu, SpeedupMusicForLastTriforcePiece, SlowdownMusicWhenLowhp,
     UninvertYAxisInFirstPersonCamera, InputViewer, DisableBattleMusic, CreditsMusic)
 from .Rom import Rom, compress_rom_file
-from .N64Patch import apply_patch_file
 from .Utils import __version__ as oot_version
 from Utils import local_path, user_path, persistent_store, get_adjuster_settings_no_defaults
 
@@ -145,7 +143,7 @@ def adjustGUI():
     vanillaEntry = Entry(romDialogFrame, textvariable=opts.vanilla_rom)
 
     def RomSelect():
-        rom = filedialog.askopenfilename(filetypes=[("Rom Files", (".z64", ".n64", ".apz5")), ("All Files", "*")])
+        rom = filedialog.askopenfilename(filetypes=[("Rom Files", (".z64", ".n64")), ("All Files", "*")])
         opts.rom.set(rom)
     def VanillaSelect():
         rom = filedialog.askopenfilename(filetypes=[("Rom Files", (".z64", ".n64")), ("All Files", "*")])
@@ -574,20 +572,8 @@ def adjust(args, status_callback=None):
         update_status("Loading ROM...")
         rom = Rom(file=args.rom, force_use=True)
         delete_zootdec = True
-    elif os.path.splitext(args.rom)[-1] in ['.apz5', '.zpf']:
-        # Load vanilla ROM
-        update_status("Loading base ROM...")
-        rom = Rom(file=args.vanilla_rom, force_use=True)
-        apz5_file = args.rom
-        base_name = os.path.splitext(apz5_file)[0]
-        # Patch file
-        update_status("Applying patch file...")
-        apply_patch_file(rom, apz5_file,
-            sub_file=(os.path.basename(base_name) + '.zpf'
-                if zipfile.is_zipfile(apz5_file)
-                else None))
     else:
-        raise Exception("Invalid file extension; requires .n64, .z64, .apz5, .zpf")
+        raise Exception("Invalid file extension; requires .n64 or .z64")
     # Call patch_cosmetics
     try:
         update_status("Applying cosmetic changes...")

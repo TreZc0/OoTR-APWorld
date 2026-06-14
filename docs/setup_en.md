@@ -51,9 +51,9 @@ validator page: [YAML Validation page](/mysterycheck)
 
 When you join a multiworld game, you will be asked to provide your YAML file to whoever is hosting. Once that is done,
 the host will provide you with either a link to download your data file, or with a zip file containing everyone's data
-files. Your data file should have a `.apz5` extension.
+files. Your data file should have a `.apoot` extension.
 
-Double-click on your `.apz5` file to start your client and start the ROM patch process. Once the process is finished
+Double-click on your `.apoot` file to start your client and start the ROM patch process. Once the process is finished
 (this can take a while), the client and the emulator will be started automatically.
 Alternatively, you can run the `Ocarina of Time Adjuster` from the launcher, allowing you to customize you seed with a lot of visual and sfx options, like custom music, voices, models, and a lot of color and sound options.
 After patching, the client is started automatically.

@@ -2,9 +2,10 @@ import struct
 import itertools
 import re
 import zlib
-import zipfile
 import os
 import datetime
+import hashlib
+import tempfile
 from collections import defaultdict
 from functools import partial
 
@@ -36,7 +37,8 @@ from .ntype import BigStream
 from .Cutscenes import patch_cutscenes, patch_wondertalk2
 from .OcarinaSongs import patch_songs
 
-from worlds.Files import APPatch
+from settings import get_settings
+from worlds.Files import APPatchExtension, APProcedurePatch
 from Utils import __version__ as ap_version
 
 AP_PROGRESSION = 0x11B
@@ -58,20 +60,63 @@ AP_TRIFORCE_GREY_PATCHES = (
 )
 
 
-class OoTContainer(APPatch):
+class OoTProcedurePatch(APProcedurePatch):
     game: str = 'Ocarina of Time'
-    patch_file_ending = ".apz5"
+    hash = [
+        "5bd1fe107bf8106b2ab6650abecd54d6",  # NTSC-U z64
+        "6697768a7a7df2dd27a692a2638ea90b",  # NTSC-U n64, byte-swapped
+        "05f0f3ebacbc8df9243b6148ffe4792f",  # NTSC-U decompressed z64
+        "9f04c8e68534b870f707c247fa4b50fc",  # NTSC-J z64
+        "7d44b555e0af3eec36319b5e76e31b0c",  # NTSC-J n64, byte-swapped
+        "a6090ade6efb0490f5e74838d47bbfac",  # NTSC-J decompressed z64
+    ]
+    patch_file_ending = ".apoot"
+    result_file_ending = ".z64"
+    procedure = [
+        ("apply_oot_seed", ["oot_seed.json"]),
+    ]
 
-    def __init__(self, patch_data: bytes, base_path: str, output_directory: str,
-                 player = None, player_name: str = "", server: str = ""):
-        self.patch_data = patch_data
-        self.zpf_path = base_path + ".zpf"
-        container_path = os.path.join(output_directory, base_path + ".apz5")
-        super().__init__(container_path, player, player_name, server)
+    @classmethod
+    def get_source_data(cls) -> bytes:
+        path = get_settings().oot_options.rom_file
+        with open(path, "rb") as infile:
+            data = infile.read()
+        if hashlib.md5(data).hexdigest() not in cls.hash:
+            raise Exception("Supplied base ROM does not match any supported Ocarina of Time version.")
+        return data
 
-    def write_contents(self, opened_zipfile: zipfile.ZipFile) -> None:
-        opened_zipfile.writestr(self.zpf_path, self.patch_data)
-        super().write_contents(opened_zipfile)
+
+class OoTPatchExtension(APPatchExtension):
+    game = "Ocarina of Time"
+
+    @staticmethod
+    def apply_oot_seed(caller: APProcedurePatch, rom: bytes, seed_file: str) -> bytes:
+        from .Cosmetics import patch_cosmetics
+        from .APPPSeedData import build_world_from_seed_data
+        from .Rom import compress_rom_file
+
+        world = build_world_from_seed_data(caller.get_file(seed_file))
+        base_path = None
+        decomp_path = None
+        comp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".z64") as base_file:
+                base_file.write(rom)
+                base_path = base_file.name
+            decomp_path = base_path + "-decomp.z64"
+            comp_path = base_path + "-patched.z64"
+
+            patched_rom = Rom(file=base_path, force_use=True)
+            patch_rom(world, patched_rom)
+            patch_cosmetics(world, patched_rom)
+            patched_rom.write_to_file(decomp_path)
+            compress_rom_file(decomp_path, comp_path)
+            with open(comp_path, "rb") as outfile:
+                return outfile.read()
+        finally:
+            for path in (base_path, decomp_path, comp_path):
+                if path and os.path.exists(path):
+                    os.remove(path)
 
 
 def patch_rom(world, rom):

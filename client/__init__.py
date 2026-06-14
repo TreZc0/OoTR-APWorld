@@ -2,7 +2,6 @@ import asyncio
 import json
 import os
 import multiprocessing
-import zipfile
 from asyncio import StreamReader, StreamWriter
 
 # CommonClient import first to trigger ModuleUpdater
@@ -14,10 +13,9 @@ try:
 except ImportError:
     apname = "Archipelago"
 from worlds import network_data_package
-from .. import OOTWorld, launch_rom
-from ..Rom import Rom, compress_rom_file
-from ..N64Patch import apply_patch_file
+from .. import launch_rom
 from ..Utils import __version__ as oot_version
+from Patch import create_rom_file
 
 CONNECTION_TIMING_OUT_STATUS = "Connection timing out. Please restart your emulator."
 CONNECTION_REFUSED_STATUS = "Connection refused. Please start your emulator and load your OoT AP ROM."
@@ -331,33 +329,16 @@ async def run_game(romfile, ctx: OoTContext | None = None):
     await asyncio.to_thread(launch_rom, romfile, logger, status_callback)
 
 
-def patch_game(apz5_file):
-    apz5_file = os.path.abspath(apz5_file)
-    base_name = os.path.splitext(apz5_file)[0]
-    decomp_path = base_name + '-decomp.z64'
-    comp_path = base_name + '.z64'
-    rom_file_name = OOTWorld.settings.rom_file
-    rom = Rom(rom_file_name)
-
-    sub_file = None
-    if zipfile.is_zipfile(apz5_file):
-        for name in zipfile.ZipFile(apz5_file).namelist():
-            if name.endswith('.zpf'):
-                sub_file = name
-                break
-
-    apply_patch_file(rom, apz5_file, sub_file=sub_file)
-    rom.write_to_file(decomp_path)
-    compress_rom_file(decomp_path, comp_path)
-    os.remove(decomp_path)
+def patch_game(apoot_file):
+    _, comp_path = create_rom_file(os.path.abspath(apoot_file))
     return comp_path
 
 
-async def patch_and_run_game(apz5_file, ctx: OoTContext | None = None):
+async def patch_and_run_game(apoot_file, ctx: OoTContext | None = None):
     try:
-        comp_path = await asyncio.to_thread(patch_game, apz5_file)
+        comp_path = await asyncio.to_thread(patch_game, apoot_file)
     except Exception:
-        logger.exception("Failed to patch OoT APZ5 file.")
+        logger.exception("Failed to patch OoT APOOT file.")
         return
 
     await run_game(comp_path, ctx)
@@ -385,14 +366,14 @@ def main(*launcher_args: str):
     async def main():
         multiprocessing.freeze_support()
         parser = get_base_parser()
-        parser.add_argument('apz5_file', default="", type=str, nargs="?",
-                            help='Path to an APZ5 file')
+        parser.add_argument('apoot_file', default="", type=str, nargs="?",
+                            help='Path to an APOOT file')
         args = parser.parse_args(launcher_args)
 
         ctx = OoTContext(args.connect, args.password)
-        if args.apz5_file:
-            logger.info("APZ5 file supplied, beginning patching process...")
-            async_start(patch_and_run_game(args.apz5_file, ctx))
+        if args.apoot_file:
+            logger.info("APOOT file supplied, beginning patching process...")
+            async_start(patch_and_run_game(args.apoot_file, ctx))
 
         ctx.server_task = asyncio.create_task(server_loop(ctx), name="Server Loop")
         if gui_enabled:

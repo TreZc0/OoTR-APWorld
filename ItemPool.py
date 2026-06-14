@@ -384,7 +384,7 @@ def generate_itempool(ootworld):
     multiworld = ootworld.multiworld
     player = ootworld.player
     global random
-    random = multiworld.random
+    random = ootworld.random
 
     junk_pool = get_junk_pool(ootworld)
 

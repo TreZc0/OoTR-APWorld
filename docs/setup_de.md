@@ -68,7 +68,7 @@ teilnehmenden Spieler (bzw. Welten) aufgelistet sind. Du solltest dich dann auf 
 und klicke dann auf `Download Patch File...`.
 ![Screenshot of a Multiworld Room with an Ocarina of Time Player](MultiWorld-Room_oot.png)
 
-Führe die `.apz5`-Datei mit einem Doppelklick aus, um deinen Ocarina Of Time-Client zu starten, sowie das patchen
+Führe die `.apoot`-Datei mit einem Doppelklick aus, um deinen Ocarina Of Time-Client zu starten, sowie das patchen
 deiner ROM. Ist dieser Prozess fertig (kann etwas dauern), startet sich der Client und der Emulator automatisch
 (sofern das "Öffnen mit..." ausgewählt wurde).
 Alternativ kannst du den `Ocarina of Time Adjuster` vom Launcher aus nutzen, um viele Visuals und Soundeinstellungen anzupassen, wie eigene Musik, Models, Farben, usw.
