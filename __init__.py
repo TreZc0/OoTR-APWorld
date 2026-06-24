@@ -918,18 +918,10 @@ class OOTWorld(World):
         """Push a chosen reward as starting inventory and mark Rauru as a non-sendable check."""
         self.hinted_dungeon_reward_locations[reward_name] = None
         self.multiworld.push_precollected(self.create_item(reward_name))
-        self._grant_rauru_skip_state()
         rauru_location.address = None
         rauru_location.show_in_spoiler = False
         if rauru_location in rauru_location.parent_region.locations:
             rauru_location.parent_region.locations.remove(rauru_location)
-
-    def _grant_rauru_skip_state(self):
-        if not any(item.name == 'Time Travel' for item in self.multiworld.precollected_items[self.player]):
-            self.multiworld.push_precollected(self.create_item('Time Travel'))
-        if 'Time Travel' not in self.remove_from_start_inventory:
-            self.remove_from_start_inventory.append('Time Travel')
-
 
     @staticmethod
     def item_dungeon_name_from_name(item_name: str) -> Optional[str]:
@@ -1827,7 +1819,6 @@ class OOTWorld(World):
                         and extracted.type == 'DungeonReward'):
                     self.hinted_dungeon_reward_locations[extracted.name] = None
 
-                self._grant_rauru_skip_state()
                 rauru_loc.address = None
                 rauru_loc.show_in_spoiler = False
                 if rauru_loc in rauru_loc.parent_region.locations:
