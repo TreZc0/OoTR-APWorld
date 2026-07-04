@@ -407,10 +407,27 @@ def valid_oot_item_placement(location, item) -> bool:
     if location_is_empty:
         return (
             item.player == location.player
-            and item_empty_dungeon == location_dungeon
+            and (
+                item_empty_dungeon == location_dungeon
+                or (
+                    item.type == 'Song'
+                    and item_world.shuffle_song_items == 'dungeon'
+                    and location.name in dungeon_song_locations
+                )
+            )
         )
     if item_empty_dungeon is not None:
         return False
+
+    if item.type == 'Song' and item_world.shuffle_song_items != 'any' and not item_world.songs_as_items:
+        if item.player != location.player:
+            return False
+        if getattr(item, 'song_main_pool_fallback', False):
+            return True
+        if item_world.shuffle_song_items == 'song':
+            return location.type == 'Song'
+        if item_world.shuffle_song_items == 'dungeon':
+            return location.name in dungeon_song_locations
 
     shuffle_setting = oot_item_shuffle_setting(item_world, item)
     if shuffle_setting is None or shuffle_setting in {'keysanity', 'anywhere'}:
