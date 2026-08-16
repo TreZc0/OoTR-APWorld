@@ -358,6 +358,19 @@ def patch_game(apz5_file):
     return comp_path
 
 
+def get_apz5_server(apz5_file: str) -> str | None:
+    """Return the server address baked into an APZ5 container, if present."""
+    try:
+        with zipfile.ZipFile(apz5_file) as apz5:
+            with apz5.open("archipelago.json") as manifest_file:
+                manifest = json.load(manifest_file)
+    except (OSError, KeyError, UnicodeDecodeError, zipfile.BadZipFile, json.JSONDecodeError):
+        return None
+
+    server = manifest.get("server") if isinstance(manifest, dict) else None
+    return server if isinstance(server, str) and server else None
+
+
 async def patch_and_run_game(apz5_file, ctx: OoTContext | None = None):
     try:
         comp_path = await asyncio.to_thread(patch_game, apz5_file)
@@ -393,6 +406,9 @@ def main(*launcher_args: str):
         parser.add_argument('apz5_file', default="", type=str, nargs="?",
                             help='Path to an APZ5 file')
         args = parser.parse_args(launcher_args)
+
+        if args.apz5_file and not args.connect:
+            args.connect = get_apz5_server(args.apz5_file)
 
         ctx = OoTContext(args.connect, args.password)
         if args.apz5_file:
