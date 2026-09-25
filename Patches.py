@@ -460,8 +460,21 @@ def patch_rom(world, rom):
         rom.write_bytes(symbol, part_bytes)
 
     # Change graveyard graves to not allow grabbing on to the ledge
-    rom.write_byte(0x0202039D, 0x20)
-    rom.write_byte(0x0202043C, 0x24)
+    # Use a floor type that makes Link fall rather than grab a ledge.
+    rom.write_int32s(0x2026C04, [0x24000004, 0x00000FC8])
+    floors_surrounding_graves = (
+        range(494, 502), range(502, 510), range(487, 494), range(651, 659),
+    )
+    for grave in floors_surrounding_graves:
+        for poly in grave:
+            rom.write_int16(0x2020494 + poly * 0x10, 0x0D0D)
+
+    grave_walls = (
+        range(613, 621), range(623, 631), range(633, 641), range(643, 651),
+    )
+    for grave in grave_walls:
+        for poly in grave:
+            rom.write_int16(0x2020494 + poly * 0x10, 0x000F)
 
     # Fix Castle Courtyard to check for meeting Zelda, not Zelda fleeing, to block you
     rom.write_bytes(0xCD5E76, [0x0E, 0xDC])
@@ -493,22 +506,6 @@ def patch_rom(world, rom):
     if world.shuffle_ocarinas:
         symbol = rom.sym('OCARINAS_SHUFFLED')
         rom.write_byte(symbol,0x01)
-
-    # Speed Zelda Light Arrow cutscene
-    rom.write_bytes(0x2531B40, [0x00, 0x28, 0x00, 0x01, 0x00, 0x02, 0x00, 0x02])
-    rom.write_bytes(0x2532FBC, [0x00, 0x75])
-    rom.write_bytes(0x2532FEA, [0x00, 0x75, 0x00, 0x80])
-    rom.write_byte(0x2533115, 0x05)
-    rom.write_bytes(0x2533141, [0x06, 0x00, 0x06, 0x00, 0x10])
-    rom.write_bytes(0x2533171, [0x0F, 0x00, 0x11, 0x00, 0x40])
-    rom.write_bytes(0x25331A1, [0x07, 0x00, 0x41, 0x00, 0x65])
-    rom.write_bytes(0x2533642, [0x00, 0x50])
-    rom.write_byte(0x253389D, 0x74)
-    rom.write_bytes(0x25338A4, [0x00, 0x72, 0x00, 0x75, 0x00, 0x79])
-    rom.write_bytes(0x25338BC, [0xFF, 0xFF])
-    rom.write_bytes(0x25338C2, [0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF])
-    rom.write_bytes(0x25339C2, [0x00, 0x75, 0x00, 0x76])
-    rom.write_bytes(0x2533830, [0x00, 0x31, 0x00, 0x81, 0x00, 0x82, 0x00, 0x82])
 
     #Speed Pushing of All Pushable Objects
     rom.write_bytes(0xDD2B86, [0x40, 0x80])             #block speed
@@ -631,12 +628,6 @@ def patch_rom(world, rom):
     if world.open_forest != 'closed':
         rom.write_bytes(0xE5401C, [0x14, 0x0B])
 
-    # Fix Shadow Temple to check for different rewards for scene
-    rom.write_bytes(0xCA3F32, [0x00, 0x00, 0x25, 0x4A, 0x00, 0x10])
-
-    # Fix Spirit Temple to check for different rewards for scene
-    rom.write_bytes(0xCA3EA2, [0x00, 0x00, 0x25, 0x4A, 0x00, 0x08])
-
     # Remove the check on the number of days that passed for claim check.
     rom.write_bytes(0xED4470, [0x00, 0x00, 0x00, 0x00])
     rom.write_bytes(0xED4498, [0x00, 0x00, 0x00, 0x00])
@@ -688,13 +679,7 @@ def patch_rom(world, rom):
     for address in Short_item_descriptions:
         rom.write_byte(address,0x02)
 
-    et_original = rom.read_bytes(0xB6FBF0, 4 * 0x0614)
-
     exit_updates = []
-
-    def copy_entrance_record(source_index, destination_index, count=4):
-        ti = source_index * 4
-        rom.write_bytes(0xB6FBF0 + destination_index * 4, et_original[ti:ti+(4 * count)])
 
     def generate_exit_lookup_table():
         # Assumes that the last exit on a scene's exit list cannot be 0000
@@ -760,10 +745,11 @@ def patch_rom(world, rom):
         rom.write_int32(0xBC6160, 0x24180000) #li t8, 0
         rom.write_int32(0xBC6168, 0xAD380000) #sw t8, 0(t1)
 
-        # Credit to engineer124
-        # Update the Jabu-Jabu Boss Exit to actually useful coordinates (and to load the correct room)
-        rom.write_int16(0x273E08E, 0xF7F4)  # Z coordinate of Jabu Boss Door Spawn
-        rom.write_byte(0x273E27B, 0x05)  # Set Spawn Room to be correct
+    # Credit to engineer124: make the Jabu-Jabu boss exit load the right room.
+    rom.write_int16(0x273E08E, 0xF7F4)
+    rom.write_byte(0x273E27B, 0x05)
+    # The Water Temple boss exit must load the room containing the return entrance.
+    rom.write_byte(0x25B82E3, 0x0B)
 
     def set_entrance_updates(entrances):
 
@@ -839,12 +825,6 @@ def patch_rom(world, rom):
     if world.shuffle_dungeon_entrances:
         rom.write_byte(rom.sym('DUNGEONS_SHUFFLED'), 1)
 
-        # Connect lake hylia fill exit to revisit exit
-        rom.write_int16(0xAC995A, 0x060C)
-
-        # Tell the well water we are always a child.
-        rom.write_int32(0xDD5BF4, 0x00000000)
-
         # Make the Adult well blocking stone dissappear if the well has been drained by
         # checking the well drain event flag instead of links age. This actor doesn't need a
         # code check for links age as the stone is absent for child via the scene alternate
@@ -860,11 +840,6 @@ def patch_rom(world, rom):
 
     if world.shuffle_hideout_entrances:
         rom.write_byte(rom.sym('HIDEOUT_SHUFFLED'), 1)
-
-    if (world.shuffle_overworld_entrances or world.shuffle_dungeon_entrances
-        or world.entrance_rando_reward_hints):
-        # Remove deku sprout and drop player at SFM after forest completion
-        rom.write_int16(0xAC9F96, 0x0608)
 
     if world.spawn_positions:
         # Fix save warping inside Link's House to not be a special case
@@ -1069,9 +1044,6 @@ def patch_rom(world, rom):
     rom.write_int16(0x00E1F3CA, 0x5036)
     rom.write_int16(0x00E1F3CC, 0x5036)
 
-    # Make the Kakariko Gate not open with the MS
-    if world.open_kakariko != 'open':
-        rom.write_int32(0xDD3538, 0x34190000) # li t9, 0
     if world.open_kakariko == 'open':
         rom.write_byte(rom.sym('OPEN_KAKARIKO'), 2)
     elif world.open_kakariko != 'closed':
@@ -1099,6 +1071,11 @@ def patch_rom(world, rom):
 
     if world.auto_equip_masks:
         rom.write_byte(rom.sym('CFG_MASK_AUTOEQUIP'), 0x01)
+        # Let actors outside the mask trade sequence use their regular dialogue
+        # while Link keeps a mask equipped across scene changes.
+        for mask_segment_id in range(0x3C):
+            if mask_segment_id not in (0x05, 0x06, 0x07, 0x0F, 0x15, 0x1C):
+                rom.write_int16s(0xB66E60 + mask_segment_id * 0x12, [0] * 9)
 
     if world.skip_child_zelda:
         save_context.give_item(world, 'Zeldas Letter')
@@ -1111,12 +1088,15 @@ def patch_rom(world, rom):
             save_context.give_item(world, "Arrows (30)")
         elif item.name == 'Bomb Bag': 
             save_context.give_item(world, "Bombs (20)")
-        save_context.write_bits(0x0ED7, 0x04) # "Obtained Malon's Item"
+        if all(item not in world.shuffle_child_trade for item in ('Weird Egg', 'Chicken')):
+            save_context.write_bits(0x0ED7, 0x04) # "Obtained Malon's Item"
         save_context.write_bits(0x0ED7, 0x08) # "Woke Talon in castle"
         save_context.write_bits(0x0ED7, 0x10) # "Talon has fled castle"
         save_context.write_bits(0x0EDD, 0x01) # "Obtained Zelda's Letter"
         save_context.write_bits(0x0EDE, 0x02) # "Learned Zelda's Lullaby"
         save_context.write_bits(0x00D4 + 0x5F * 0x1C + 0x04 + 0x3, 0x10) # "Moved crates to access the courtyard"
+
+    if world.skip_child_zelda or 'Zeldas Letter' in world.starting_items:
         if world.open_kakariko != 'closed':
             save_context.write_bits(0x0F07, 0x40) # "Spoke to Gate Guard About Mask Shop"
         if world.complete_mask_quest:
@@ -1356,6 +1336,11 @@ def patch_rom(world, rom):
 
     patch_files(rom, mq_scenes)
 
+    # Set the seed's Hylian Shield discount for every shopkeeper entry.
+    possible_discounts = [0x0005, 0x000A, 0x000F, 0x0014, 0x0019, 0x001E, 0x0023, 0x0028]
+    set_discount = world.random.choice(possible_discounts)
+    rom.write_int16s(0xC0290C, [set_discount] * 8)
+
     ### Load Shop File
     # Move shop actor file to free space
     shop_item_file = File({
@@ -1519,6 +1504,10 @@ def patch_rom(world, rom):
         # Update the first horseback archery text to make it clear both rewards are available from the start
         update_message_by_id(messages, 0x6040, "Hey newcomer, you have a fine \x01horse!\x04I don't know where you stole \x01it from, but...\x04OK, how about challenging this \x01\x05\x41horseback archery\x05\x40?\x04Once the horse starts galloping,\x01shoot the targets with your\x01arrows. \x04Let's see how many points you \x01can score. You get 20 arrows.\x04If you can score \x05\x411,000 points\x05\x40, I will \x01give you something good! And even \x01more if you score \x05\x411,500 points\x05\x40!\x0B\x02")
 
+    # Do not wait for the fanfare before the next horseback archery reward.
+    rom.write_byte(0xC1C00B, 0x02)
+    rom.write_byte(0xC1C01B, 0x02)
+
     # Sets hooks for gossip stone changes
 
     symbol = rom.sym("GOSSIP_HINT_CONDITION")
@@ -1546,6 +1535,9 @@ def patch_rom(world, rom):
     # build misc. location hints
     buildMiscLocationHints(world, messages)
     buildMiscDualHints(world, messages)
+
+    if 'mask_shop' in world.misc_hints:
+        rom.write_int32(rom.sym('CFG_MASK_SHOP_HINT'), 1)
 
     # Make the cursed Skulltula House residents descend immediately so their
     # reward hints can be read before reaching the matching token counts.
@@ -2245,6 +2237,12 @@ def patch_rom(world, rom):
 
     patch_songs(world, rom)
 
+    if world.shuffle_individual_ocarina_notes:
+        epona_notes = str(world.song_notes['Eponas Song'])
+        required_notes = {'A': 0, '^': 1, 'v': 2, '<': 3, '>': 4}
+        note_mask = sum(1 << bit for note, bit in required_notes.items() if note in epona_notes)
+        rom.write_byte(rom.sym('EPONAS_SONG_NOTES'), note_mask)
+
     # Sets the torch count to open the entrance to Shadow Temple
     if world.easier_fire_arrow_entry:
         torch_count = world.fae_torch_count
@@ -2252,6 +2250,31 @@ def patch_rom(world, rom):
 
     # Fix crash when hitting white bubble enemies with Din's Fire
     rom.write_byte(0xCB4397, 0x00)
+
+    # Match upstream's easier Hyrule Loach behavior.
+    if world.shuffle_loach_reward == 'easy':
+        # Always spawn the loach, and record that easy behavior is enabled.
+        rom.write_int32(0xDBF1E4, 0xA201B057)
+
+        # Make the sinking lure available immediately in all four positions.
+        rom.write_int32(0xDC2F00, 0x00000000)
+        rom.write_int32(0xDC2F10, 0x00000000)
+        rom.write_int32(0xDCC064, 0x00000000)
+        rom.write_int32(0xDCC06C, 0x00000000)
+        rom.write_int32(0xDCC12C, 0x00000000)
+        rom.write_int32(0xDCC134, 0x00000000)
+
+        # Allow normal child/adult fishing prizes when using the sinking lure.
+        rom.write_int32(0xDCBEBC, 0x00000000)
+        rom.write_int32(0xDCBEC0, 0x00000000)
+        rom.write_int32(0xDCBF1C, 0x00000000)
+        rom.write_int32(0xDCBF20, 0x00000000)
+        rom.write_byte(0xDCBBDB, 0x86)
+
+        # Shorten the loach catch timer.
+        rom.write_int32(0xDC652C, 0x240100C8)
+        rom.write_int32(0xDC6540, 0xA6010192)
+        rom.write_int32(0xDC6550, 0xE60601AC)
 
     if world.blue_fire_arrows:
         rom.write_byte(0xC230C1, 0x29) #Adds AT_TYPE_OTHER to arrows to allow collision with red ice
@@ -2771,9 +2794,19 @@ def get_doors_to_unlock(rom, world):
             if actor_id == 0x002E and door_type == 0x0B and scene != 0x10:
                 return [0x00D4 + scene * 0x1C + 0x04 + flag_byte, flag_bits]
 
-        # Return Boss Doors that should be unlocked
-        if (world.shuffle_bosskeys == 'remove' and scene != 0x0A) or (world.shuffle_ganon_bosskey == 'remove' and scene == 0x0A) or (world.shuffle_pots and scene == 0x0A and switch_flag == 0x15):
-            if actor_id == 0x002E and door_type == 0x05:
+        # A removed key ring also removes its bundled boss key.
+        if actor_id == 0x002E and door_type == 0x05:
+            boss_dungeons = {
+                0x03: 'Forest Temple', 0x04: 'Fire Temple', 0x05: 'Water Temple',
+                0x06: 'Spirit Temple', 0x07: 'Shadow Temple',
+            }
+            if scene in boss_dungeons and world.keyring_gives_boss_key(boss_dungeons[scene]):
+                setting = world.shuffle_smallkeys
+            elif scene == 0x0A:
+                setting = world.shuffle_ganon_bosskey
+            else:
+                setting = world.shuffle_bosskeys
+            if setting == 'remove' or (world.shuffle_pots != 'off' and scene == 0x0A and switch_flag == 0x15):
                 return [0x00D4 + scene * 0x1C + 0x04 + flag_byte, flag_bits]
 
     return get_actor_list(rom, get_door_to_unlock)
