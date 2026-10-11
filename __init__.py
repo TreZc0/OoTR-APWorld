@@ -2,6 +2,8 @@ import logging
 import threading
 import copy
 import functools
+import json
+import os
 import settings
 import typing
 from typing import Optional, List, AbstractSet, Union  # remove when 3.8 support is dropped
@@ -25,10 +27,9 @@ from .LocationList import business_scrubs, dungeon_song_locations, location_sort
 from .DungeonList import dungeon_table, create_dungeons
 from .LogicTricks import normalized_name_tricks, normalized_name_advanced_tricks
 from .OcarinaSongs import SONG_TABLE, Song, generate_song_list
-from .Rom import Rom
-from .Patches import AP_MAX_PLAYER_ID, OoTContainer, patch_rom
-from .N64Patch import create_patch_file
-from .Cosmetics import patch_cosmetics
+from .Patches import AP_MAX_PLAYER_ID
+from .appp import OoTProcedurePatch
+from .appp.generate import build_patch_data
 
 from BaseClasses import MultiWorld, CollectionState, Tutorial
 from Options import Range, Toggle, VerifyKeys, Accessibility, PlandoConnections, PlandoItems
@@ -36,9 +37,6 @@ from Fill import fill_restrictive, fast_fill, FillError, sweep_from_pool
 from worlds.generic.Rules import exclusion_rules, add_item_rule
 from worlds.AutoWorld import World, AutoLogicRegister, WebWorld
 from worlds.LauncherComponents import launch as launch_component, components, Component, Type, SuffixIdentifier, icon_paths
-
-# OoT's generate_output doesn't benefit from more than 2 threads, instead it uses a lot of memory.
-i_o_limiter = threading.Semaphore(2)
 
 class _StartingItemRecord:
     def __init__(self, count: int):
@@ -75,7 +73,7 @@ def launch_client(*args):
 
 icon_paths["oot"] = f"ap:{__name__}/data/icon.png"
 components.append(Component(display_name="Ocarina of Time Client", func=launch_client, component_type=Type.CLIENT,
-                            file_identifier=SuffixIdentifier('.apz5'),
+                            file_identifier=SuffixIdentifier('.apoot'),
                             description=f"Connect to an OoT multiworld using OoT APWorld {oot_version}.", icon="oot"))
 
 
@@ -310,12 +308,6 @@ class OOTWorld(World):
         self.hint_data_available = threading.Event()
         self.collectible_flags_available = threading.Event()
         super(OOTWorld, self).__init__(world, player)
-
-
-    @classmethod
-    def stage_assert_generate(cls, multiworld: MultiWorld):
-        oot_settings = OOTWorld.settings
-        rom = Rom(file=oot_settings.rom_file)
 
 
     @staticmethod
@@ -2234,37 +2226,25 @@ class OOTWorld(World):
         if self.hints != 'none' or self.misc_hints:
             self.hint_data_available.wait()
 
-        with i_o_limiter:
-            # Make traps appear as other random items
-            trap_location_ids = [loc.address for loc in self.get_locations() if loc.item.trap]
-            self.trap_appearances = {}
-            for loc_id in trap_location_ids:
-                self.trap_appearances[loc_id] = self.create_item(self.random.choice(self.fake_items).name)
-
-            # Seed hint RNG, used for ganon text lines also
-            self.hint_rng = self.random
-
+        # Resolve the filled world into patch data; this path never opens a ROM.
+        self.trap_appearances = {
+            location.address: self.create_item(self.random.choice(self.fake_items).name)
+            for location in self.get_locations() if location.item is not None and location.item.trap
+        }
+        self.hint_rng = self.random
+        try:
+            if self.hints != 'none':
+                buildWorldGossipHints(self)
+            patch_data = build_patch_data(self)
             outfile_name = self.multiworld.get_out_file_name_base(self.player)
-            oot_settings = OOTWorld.settings
-            rom = Rom(file=oot_settings.rom_file)
-            try:
-                if self.hints != 'none':
-                    buildWorldGossipHints(self)
-                patch_rom(self, rom)
-                patch_cosmetics(self, rom)
-            except Exception as e:
-                logger.exception("Failed while generating OoT output for player %s.", self.player)
-                raise e
-            finally:
-                self.collectible_flags_available.set()
-            rom.update_header()
-            patch_data = create_patch_file(rom, self.random)
-            rom.restore()
-
-            apz5 = OoTContainer(patch_data, outfile_name, output_directory,
-                player=self.player,
-                player_name=self.multiworld.get_player_name(self.player))
-            apz5.write()
+            patch = OoTProcedurePatch(
+                os.path.join(output_directory, outfile_name + OoTProcedurePatch.patch_file_ending),
+                player=self.player, player_name=self.multiworld.get_player_name(self.player))
+            patch.write_file("seed.json", json.dumps(patch_data, ensure_ascii=True, separators=(",", ":"),
+                                                    allow_nan=False).encode("utf-8"))
+            patch.write()
+        finally:
+            self.collectible_flags_available.set()
 
 
     # Gathers hint data for OoT. Loops over all world locations for woth, barren, and major item locations.

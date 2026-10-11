@@ -15,8 +15,7 @@ except ImportError:
     apname = "Archipelago"
 from worlds import network_data_package
 from .. import OOTWorld, launch_rom
-from ..Rom import Rom, compress_rom_file
-from ..N64Patch import apply_patch_file
+from Patch import create_rom_file
 from ..Utils import __version__ as oot_version
 
 CONNECTION_TIMING_OUT_STATUS = "Connection timing out. Please restart your emulator."
@@ -336,33 +335,16 @@ async def run_game(romfile, ctx: OoTContext | None = None):
     await asyncio.to_thread(launch_rom, romfile, logger, status_callback)
 
 
-def patch_game(apz5_file):
-    apz5_file = os.path.abspath(apz5_file)
-    base_name = os.path.splitext(apz5_file)[0]
-    decomp_path = base_name + '-decomp.z64'
-    comp_path = base_name + '.z64'
-    rom_file_name = OOTWorld.settings.rom_file
-    rom = Rom(rom_file_name)
-
-    sub_file = None
-    if zipfile.is_zipfile(apz5_file):
-        for name in zipfile.ZipFile(apz5_file).namelist():
-            if name.endswith('.zpf'):
-                sub_file = name
-                break
-
-    apply_patch_file(rom, apz5_file, sub_file=sub_file)
-    rom.write_to_file(decomp_path)
-    compress_rom_file(decomp_path, comp_path)
-    os.remove(decomp_path)
-    return comp_path
+def patch_game(patch_file):
+    _, rom_path = create_rom_file(os.path.abspath(patch_file))
+    return rom_path
 
 
-def get_apz5_server(apz5_file: str) -> str | None:
-    """Return the server address baked into an APZ5 container, if present."""
+def get_patch_server(patch_file: str) -> str | None:
+    """Return the server address baked into an APOOT container, if present."""
     try:
-        with zipfile.ZipFile(apz5_file) as apz5:
-            with apz5.open("archipelago.json") as manifest_file:
+        with zipfile.ZipFile(patch_file) as patch:
+            with patch.open("archipelago.json") as manifest_file:
                 manifest = json.load(manifest_file)
     except (OSError, KeyError, UnicodeDecodeError, zipfile.BadZipFile, json.JSONDecodeError):
         return None
@@ -371,11 +353,11 @@ def get_apz5_server(apz5_file: str) -> str | None:
     return server if isinstance(server, str) and server else None
 
 
-async def patch_and_run_game(apz5_file, ctx: OoTContext | None = None):
+async def patch_and_run_game(patch_file, ctx: OoTContext | None = None):
     try:
-        comp_path = await asyncio.to_thread(patch_game, apz5_file)
+        comp_path = await asyncio.to_thread(patch_game, patch_file)
     except Exception:
-        logger.exception("Failed to patch OoT APZ5 file.")
+        logger.exception("Failed to patch OoT APOOT file.")
         return
 
     await run_game(comp_path, ctx)
@@ -403,17 +385,17 @@ def main(*launcher_args: str):
     async def main():
         multiprocessing.freeze_support()
         parser = get_base_parser()
-        parser.add_argument('apz5_file', default="", type=str, nargs="?",
-                            help='Path to an APZ5 file')
+        parser.add_argument('patch_file', default="", type=str, nargs="?",
+                            help='Path to an APOOT file')
         args = parser.parse_args(launcher_args)
 
-        if args.apz5_file and not args.connect:
-            args.connect = get_apz5_server(args.apz5_file)
+        if args.patch_file and not args.connect:
+            args.connect = get_patch_server(args.patch_file)
 
         ctx = OoTContext(args.connect, args.password)
-        if args.apz5_file:
-            logger.info("APZ5 file supplied, beginning patching process...")
-            async_start(patch_and_run_game(args.apz5_file, ctx))
+        if args.patch_file:
+            logger.info("APOOT file supplied, beginning patching process...")
+            async_start(patch_and_run_game(args.patch_file, ctx))
 
         ctx.server_task = asyncio.create_task(server_loop(ctx), name="Server Loop")
         if gui_enabled:
