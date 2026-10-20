@@ -122,7 +122,7 @@ class OoTContext(ClientContext):
             await CommonContext.server_auth(self, password_requested)
         if not self.auth:
             self.awaiting_rom = True
-            logger.info('Awaiting connection to emulator to get player information')
+            logger.info('Awaiting connection to emulator. Note: This version of OoT will automatically connect to compatible emulators (no lua script needed).')
             return
 
         await self.send_connect()
