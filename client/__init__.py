@@ -17,6 +17,7 @@ from worlds import network_data_package
 from .. import OOTWorld, launch_rom
 from Patch import create_rom_file
 from ..Utils import __version__ as oot_version
+from ..ut.discovery import publish_discoveries
 
 CONNECTION_TIMING_OUT_STATUS = "Connection timing out. Please restart your emulator."
 CONNECTION_REFUSED_STATUS = "Connection refused. Please start your emulator and load your OoT AP ROM."
@@ -49,7 +50,7 @@ deathlink_sent_this_death: we interacted with the multiworld on this death, wait
 
 oot_loc_name_to_id = network_data_package["games"]["Ocarina of Time"]["location_name_to_id"]
 
-script_version: int = 9
+script_version: int = 10
 AP_MAX_PLAYER_ID = 1024
 
 def get_item_value(ap_id):
@@ -96,6 +97,9 @@ class OoTContext(CommonContext):
         self.version_warning = False
         self.pending_display_items: list = []
         self._unknown_location_warnings: set[str] = set()
+        self.entrance_names = []
+        self.entrance_rom = None
+        self.reported_entrances = set()
 
     async def server_auth(self, password_requested: bool = False):
         if password_requested and not self.password:
@@ -130,6 +134,13 @@ class OoTContext(CommonContext):
                 self.collectible_override_flags_address = slot_data.get('collectible_override_flags', 0)
                 self.collectible_offsets = slot_data.get('collectible_flag_offsets', {})
                 self.shop_flag_offsets = slot_data.get('shop_flag_offsets', {})
+                results = slot_data["generation_results"]
+                self.entrance_rom = results["connect_name"]
+                self.entrance_names = sorted(
+                    name for name, record in results["entrances"].items()
+                    if record["replaces"] is not None
+                )
+                self.reported_entrances.clear()
         elif cmd == 'PrintJSON':
             if args.get('type') == 'ItemSend':
                 network_item = args.get('item')
@@ -169,6 +180,8 @@ def get_payload(ctx: OoTContext):
             "collectibleOverrides": ctx.collectible_override_flags_address,
             "collectibleOffsets": ctx.collectible_offsets,
             "shopFlagOffsets": ctx.shop_flag_offsets,
+            "entranceRom": ctx.entrance_rom,
+            "entranceNames": ctx.entrance_names,
             "pendingDisplayItems": pending_display_items,
         })
     return payload
@@ -187,9 +200,14 @@ async def parse_payload(payload: dict, ctx: OoTContext, force: bool):
         ctx.deathlink_pending = False
         ctx.deathlink_sent_this_death = False
         ctx.pending_display_items = []
+        ctx.entrance_rom = None
+        ctx.entrance_names = []
+        ctx.reported_entrances.clear()
         ctx.auth = payload['playerName']
         await ctx.send_connect()
         return
+
+    await publish_discoveries(ctx, payload.get("foundEntrances", []))
 
     # Turn on deathlink if it is on, and if the client hasn't overriden it
     if payload['deathlinkActive'] and not ctx.deathlink_enabled and not ctx.deathlink_client_override:

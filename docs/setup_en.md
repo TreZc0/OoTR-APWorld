@@ -13,6 +13,10 @@
 - The built-in Archipelago Ocarina of Time client, which gets installed alongside [Archipelago](https://github.com/ArchipelagoMW/Archipelago/releases).
 - An Ocarina of Time v1.0 NTSC-U or NTSC-J ROM, needed only when patching your game.
 
+## Optional Software
+
+- [Universal Tracker APWorld](https://github.com/FarisTheAncient/Archipelago/releases)
+
 ## Install the APworld
 
 Since OoT currently ships with AP in a non-standard way, the old apworld will collide with the new one. Before installing this apworld, make sure to delete the `oot` folder in `lib/worlds` in your Archipelago folder. Afterwards, to install the APworld, simply double click it or drag and drop it into the running Archipelago Launcher. Alternatively, you can choose the option `Install APWorld` in the Archipelago Launcher or drop the `.apworld` file into the `custom_world`-folder in your Archipelago install.

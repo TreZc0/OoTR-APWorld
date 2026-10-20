@@ -16,6 +16,10 @@
 - Die neueste Version der APWorld von [hier](https://github.com/TreZc0/OoTR-APWorld/releases)
 - Eine `Ocarina of Time v1.0 NTSC-U oder NTSC-J ROM`, die erst beim Patchen benötigt wird. (Nicht aus Europa und keine Master-Quest oder Debug-Rom!)
 
+## Optionale Software
+
+- [Universal Tracker APWorld](https://github.com/FarisTheAncient/Archipelago/releases)
+
 ## APWorld installieren
 
 Da OoT aktuell auf nicht standardmäßige Weise mit AP ausgeliefert wird, kollidiert die alte APWorld mit der neuen. Lösche vor der Installation dieser APWorld den Ordner `oot` in `lib/worlds` in deinem Archipelago-Ordner. Anschließend kannst du die APWorld installieren, indem du sie doppelt anklickst oder per Drag-and-drop in den laufenden Archipelago Launcher ziehst. Alternativ kannst du im Archipelago Launcher die Option `Install APWorld` wählen oder die `.apworld`-Datei in den Ordner `custom_world` deiner Archipelago-Installation legen.

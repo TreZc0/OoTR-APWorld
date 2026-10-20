@@ -27,6 +27,7 @@ from .TextBox import character_table, NORMAL_LINE_WIDTH, rom_safe_text, line_wra
 from .texture_util import ci4_rgba16patch_to_ci8, rgba16_patch
 from .ntype import BigStream
 from .Cutscenes import patch_cutscenes, patch_wondertalk2
+from .ut.rom import tag_entrance
 
 
 AP_PROGRESSION = 0x11B
@@ -761,19 +762,23 @@ def patch_rom(context: "PatchContext", rom: Rom):
             new_entrance = entrance.data
             replaced_entrance = (entrance.replaces or entrance).data
 
+            # AP tags preserve the source entrance for UT discovery. The hooks in
+            # ASM/src/ap/entrances.asm resolve them to the real destination before loading.
             for address in new_entrance.get('addresses', []):
-                rom.write_int16(address, replaced_entrance.get('child_index', replaced_entrance['index']))
+                rom.write_int16(address, tag_entrance(
+                    rom, entrance.name, replaced_entrance.get('child_index', replaced_entrance['index'])))
 
             if entrance.type == 'BlueWarp' and replaced_entrance['index'] < 0x1000:
                 # Blue warps have multiple hardcodes. Update all 4 table slots; use child_index for
                 # child-safe warps (entries 0–1), adult index for entries 2–3.
                 child_idx = replaced_entrance.get('child_index', replaced_entrance['index'])
-                exit_updates.append((new_entrance['index'],     child_idx))
-                exit_updates.append((new_entrance['index'] + 1, child_idx + 1))
-                exit_updates.append((new_entrance['index'] + 2, replaced_entrance['index'] + 2))
-                exit_updates.append((new_entrance['index'] + 3, replaced_entrance['index'] + 3))
+                for variant, destination in enumerate((
+                        child_idx, child_idx + 1, replaced_entrance['index'] + 2, replaced_entrance['index'] + 3)):
+                    exit_updates.append((new_entrance['index'] + variant,
+                                         tag_entrance(rom, entrance.name, destination, variant)))
             elif entrance.type != 'Grotto':
-                exit_updates.append((new_entrance['index'], replaced_entrance.get('child_index', replaced_entrance['index'])))
+                exit_updates.append((new_entrance['index'], tag_entrance(
+                    rom, entrance.name, replaced_entrance.get('child_index', replaced_entrance['index']))))
 
     exit_table = generate_exit_lookup_table()
 
@@ -2724,13 +2729,16 @@ def set_grotto_shuffle_data(rom, context):
             rom.write_byte(actor + 14, grotto_type + 0x20)
 
     # Build the override table based on shuffled grotto entrances
+    # Tag both directions so UT can identify the source despite shared grotto
+    # indices; the AP hook resolves each tag before upstream grotto translation.
     grotto_entrances_override = {}
     for entrance in context.shuffled_grotto_entrances:
         if entrance.primary:
             grotto_actor_id = (entrance.data['scene'] << 8) + entrance.data['content']
-            grotto_entrances_override[grotto_actor_id] = entrance.replaces.data['index']
+            grotto_entrances_override[grotto_actor_id] = tag_entrance(rom, entrance.name, entrance.replaces.data['index'])
         else:
-            rom.write_int16(rom.sym('GROTTO_EXIT_LIST') + 2 * entrance.data['grotto_id'], entrance.replaces.data['index'])
+            rom.write_int16(rom.sym('GROTTO_EXIT_LIST') + 2 * entrance.data['grotto_id'],
+                            tag_entrance(rom, entrance.name, entrance.replaces.data['index']))
 
     # Override grotto actors data with the new data
     get_actor_list(rom, override_grotto_data)
