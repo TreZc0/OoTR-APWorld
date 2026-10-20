@@ -76,7 +76,7 @@ def launch_client(*args):
 icon_paths["oot"] = f"ap:{__name__}/data/icon.png"
 components.append(Component(display_name="Ocarina of Time Client", func=launch_client, component_type=Type.CLIENT,
                             file_identifier=SuffixIdentifier('.apoot'),
-                            description=f"Connect to an OoT multiworld using OoT APWorld {oot_version}.", icon="oot"))
+                            description=f"Connect to an OoT multiworld using OoT APWorld v{oot_version}.", icon="oot"))
 
 
 def launch_adjuster(*args):
@@ -85,7 +85,7 @@ def launch_adjuster(*args):
 
 
 components.append(Component(display_name="Ocarina of Time Adjuster", component_type=Type.ADJUSTER, func=launch_adjuster,
-                            description=f"Change Cosmetics and SFX for your OoT Seed using OoT APWorld {oot_version}.", icon="oot"))
+                            description=f"Change Cosmetics and SFX for your OoT Seed using OoT APWorld v{oot_version}.", icon="oot"))
 
 
 class OOTCollectionState(metaclass=AutoLogicRegister):
