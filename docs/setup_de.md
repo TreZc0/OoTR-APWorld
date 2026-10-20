@@ -20,6 +20,10 @@
 
 - [Universal Tracker APWorld](https://github.com/FarisTheAncient/Archipelago/releases)
 
+Wenn Universal Tracker installiert ist, enthält der Ocarina of Time Client den Tab **Tracker Page**.
+Verbinde den Client mit deinem Spiel, um den Tracker zu laden. Ein separater Tracker-Client oder eine YAML-Datei ist nicht nötig.
+Ohne Universal Tracker funktioniert der Client wie gewohnt ohne den Tracker-Tab.
+
 ## APWorld installieren
 
 Da OoT aktuell auf nicht standardmäßige Weise mit AP ausgeliefert wird, kollidiert die alte APWorld mit der neuen. Lösche vor der Installation dieser APWorld den Ordner `oot` in `lib/worlds` in deinem Archipelago-Ordner. Anschließend kannst du die APWorld installieren, indem du sie doppelt anklickst oder per Drag-and-drop in den laufenden Archipelago Launcher ziehst. Alternativ kannst du im Archipelago Launcher die Option `Install APWorld` wählen oder die `.apworld`-Datei in den Ordner `custom_world` deiner Archipelago-Installation legen.

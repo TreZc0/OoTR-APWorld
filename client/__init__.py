@@ -19,6 +19,18 @@ from Patch import create_rom_file
 from ..Utils import __version__ as oot_version
 from ..ut.discovery import publish_discoveries
 
+# Use UT's context and UI when installed, as other embedded game clients do.
+try:
+    from worlds.tracker.TrackerClient import (
+        TrackerGameContext as ClientContext,
+        TrackerCommandProcessor as ClientCommandProcessor,
+        UT_VERSION,
+    )
+    tracker_loaded = True
+except ImportError:
+    ClientContext = CommonContext
+    tracker_loaded = False
+
 CONNECTION_TIMING_OUT_STATUS = "Connection timing out. Please restart your emulator."
 CONNECTION_REFUSED_STATUS = "Connection refused. Please start your emulator and load your OoT AP ROM."
 CONNECTION_RESET_STATUS = "Connection was reset. Please restart your emulator."
@@ -74,12 +86,16 @@ class OoTCommandProcessor(ClientCommandProcessor):
             async_start(self.ctx.update_death_link(self.ctx.deathlink_enabled), name="Update Deathlink")
 
 
-class OoTContext(CommonContext):
+class OoTContext(ClientContext):
     command_processor = OoTCommandProcessor
     items_handling = 0b001  # full local
 
     def __init__(self, server_address, password):
         super().__init__(server_address, password)
+        # UT defaults to receiving all items. OoT handles local/starting items
+        # in the ROM; UT scouts checked locations for its own local item state.
+        self.items_handling = 0b001
+        self.tags = self.tags - {"Tracker"}
         self.game = 'Ocarina of Time'
         self.n64_streams: (StreamReader, StreamWriter) = None
         self.n64_sync_task = None
@@ -103,7 +119,7 @@ class OoTContext(CommonContext):
 
     async def server_auth(self, password_requested: bool = False):
         if password_requested and not self.password:
-            await super(OoTContext, self).server_auth(password_requested)
+            await CommonContext.server_auth(self, password_requested)
         if not self.auth:
             self.awaiting_rom = True
             logger.info('Awaiting connection to emulator to get player information')
@@ -115,19 +131,22 @@ class OoTContext(CommonContext):
         self.deathlink_pending = True
         super().on_deathlink(data)
 
-    def run_gui(self):
-        from kvui import GameManager
+    def make_gui(self):
+        ui = super().make_gui()
 
-        class OoTManager(GameManager):
+        class OoTManager(ui):
             logging_pairs = [
                 ("Client", "Archipelago")
             ]
-            base_title = f"Ocarina of Time Client (OoT APWorld {oot_version}) | {apname}"
+            base_title = f"Ocarina of Time Client (OoT APWorld {oot_version})"
+            if tracker_loaded:
+                base_title += f" | Universal Tracker {UT_VERSION}"
+            base_title += f" | {apname}"
 
-        self.ui = OoTManager(self)
-        self.ui_task = asyncio.create_task(self.ui.async_run(), name="UI")
+        return OoTManager
 
     def on_package(self, cmd, args):
+        super().on_package(cmd, args)
         if cmd == 'Connected':
             slot_data = args.get('slot_data', None)
             if slot_data:
@@ -411,6 +430,8 @@ def main(*launcher_args: str):
             args.connect = get_patch_server(args.patch_file)
 
         ctx = OoTContext(args.connect, args.password)
+        if tracker_loaded:
+            ctx.run_generator()
         if args.patch_file:
             logger.info("APOOT file supplied, beginning patching process...")
             async_start(patch_and_run_game(args.patch_file, ctx))
