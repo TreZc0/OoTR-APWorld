@@ -1781,9 +1781,9 @@ def build_boss_string(reward: str, color: str, world: 'OOTWorld') -> str:
                 hint_area = HintArea.at(location)
                 location_text = hint_area.text(world.clearer_hints, preposition=True, world=remote_world)
             except HintAreaNotFound:
-                # Cross-game placement (anywhere mode) - location lives in a non-OoT world
-                # with no hint-area mapping. Render a generic preposition + world annotation.
-                location_text = HintArea.ROOT.text(world.clearer_hints, preposition=True, world=remote_world)
+                # Other games have no OoT hint areas. Describe the location's world
+                location_text = (f"in #player {remote_world}'s world#" if remote_world is not None
+                                 else "in #your world#")
         text = GossipText(f"\x08\x13{item_icon}One {location_text}...", [color], prefix='')
     return str(text) + '\x04'
 
