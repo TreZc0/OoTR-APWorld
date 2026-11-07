@@ -14,12 +14,13 @@ from .ItemPool import trade_items
 from .Location import DisableType
 from .LocationList import business_scrubs
 from .Hints import HintArea
-from .Utils import data_path, encode_oot_player_name, __version_full__ as oot_version_full
+from .Utils import (data_path, encode_oot_player_name, encode_ap_display_name,
+                    AP_DISPLAY_NAME_SIZE, __version_full__ as oot_version_full)
 
 from .Messages import read_messages, update_message_by_id, read_shop_items, \
         write_shop_items, remove_unused_messages, make_player_message, \
         add_item_messages, repack_messages, shuffle_messages, \
-        get_message_by_id, Text_Code
+        get_message_by_id, Text_Code, CHARACTER_MAP
 from .MQ import patch_files, File, update_dmadata, insert_space, add_relocations
 from .Rom import Rom
 from .SaveContext import SaveContext, Scenes, FlagType
@@ -69,6 +70,8 @@ def patch_rom(context: "PatchContext", rom: Rom):
         )
     require_symbol_length(rom, 'PLAYER_ID', 2)
     require_symbol_length(rom, 'PLAYER_NAMES', AP_PLAYER_TABLE_SIZE * 8)
+    require_symbol_length(rom, 'AP_DISPLAY_NAMES', AP_PLAYER_TABLE_SIZE * AP_DISPLAY_NAME_SIZE)
+    require_symbol_length(rom, 'AP_MESSAGE_CHAR_WIDTHS', 256 * 4)
     require_symbol_length(rom, 'MW_PROGRESSIVE_ITEMS_STATE', AP_PLAYER_TABLE_SIZE * 4)
     require_symbol_length(rom, 'CFG_DUNGEON_REWARD_WORLDS', 9 * 2)
 
@@ -1516,6 +1519,7 @@ def patch_rom(context: "PatchContext", rom: Rom):
     own_slot = context.player * 8
     all_player_names[own_slot:own_slot + 8] = own_name
     rom.write_bytes(rom.sym('PLAYER_NAMES'), all_player_names)
+    patch_ap_display_names(rom, context.player_names)
 
     if context.death_link:
         rom.write_byte(rom.sym('DEATH_LINK'), 0x01)
@@ -2427,6 +2431,22 @@ def write_rom_texture(rom, texture_id, texture):
     row = [texture[f] for f in texture_fields]
     row_bytes = texture_struct.pack(*row)
     rom.write_bytes(addr, row_bytes)
+
+
+def patch_ap_display_names(rom, player_names):
+    names = bytearray(encode_ap_display_name('a player') * AP_PLAYER_TABLE_SIZE)
+    for player, name in player_names.items():
+        if not 0 <= player <= AP_MAX_PLAYER_ID:
+            raise RuntimeError(f'AP display-name player id {player} exceeds the ROM table.')
+        offset = player * AP_DISPLAY_NAME_SIZE
+        names[offset:offset + AP_DISPLAY_NAME_SIZE] = encode_ap_display_name(name)
+    rom.write_bytes(rom.sym('AP_DISPLAY_NAMES'), names)
+
+    # The runtime formatter uses the same measured glyph widths as TextBox.py.
+    widths = [character_table[' ']] * 256
+    for character, encoded in CHARACTER_MAP.items():
+        widths[encoded] = character_table.get(character, character_table[' '])
+    rom.write_bytes(rom.sym('AP_MESSAGE_CHAR_WIDTHS'), struct.pack('>256I', *widths))
 
 
 def encode_ap_item_name(item_name):

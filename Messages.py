@@ -66,6 +66,8 @@ CONTROL_CODES = {
     0xF1: ('small-key-count', 1, lambda d: '<small key count ' + "{:02x}".format(d) + '>'),
     0xF2: ('player-name', 0, lambda _: '<player name>'),
     0xF3: ('farores_wind_destination', 0, lambda _: '<farores_wind_destination>'),
+    # F4 and F6 collide with Unicode accented letters in encode_text_string.
+    0xF7: ('outgoing-recipient', 0, lambda _: '<for recipient if outgoing>'),
 }
 
 # Maps unicode characters to corresponding bytes in OOTR's character set.
@@ -297,8 +299,8 @@ ITEM_MESSAGES = {
     0x9003: "\x08You found a piece of the \x05\x41Triforce\x05\x40!",
     0x9019: "\x08\x13\x09You found a \x05\x41Bombchu Bag\x05\x40!\x01It has some \x05\x41Bombchus\x05\x40 inside!\x01Find more in tall grass.",
     0x901A: "\x08You can't buy Bombchus without a\x01\x05\x41Bombchu Bag\x05\x40!",
-    0x90B6: "\x08You found \xF0\xFE \x05\x46\xF0\xFF\x05\x40\x01for \x05\x42\xF2\x05\x40!",
-    0x90B7: "\x08You found \xF0\xFE \xF0\xFF\x01for \x05\x42\xF2\x05\x40!",
+    0x90B6: "\x08\x05\x42\x0F\x05\x40 got \xF0\xFE \x05\x46\xF0\xFF\x05\x40\x01for \x05\x42\xF2\x05\x40!",
+    0x90B7: "\x08\x05\x42\x0F\x05\x40 got \xF0\xFE \xF0\xFF\x01for \x05\x42\xF2\x05\x40!",
 
     0x00F4: "\x08\x05\x44Loser!\x05\x40\x04\x08You found only \x05\x42one Rupee\x05\x40.\x01You are not very lucky.",
     0x00F5: "\x08\x05\x44Loser!\x05\x40\x04\x08You found \x05\x43five Rupees\x05\x40.\x01Even so, you are not very lucky.",
@@ -1063,7 +1065,7 @@ def move_shop_item_messages(messages, shop_items):
             shop.purchase_message |= 0x8000
 
 def make_player_message(text):
-    player_text = '\x05\x42\x0F\x05\x40'
+    player_text = '\x05\x42\xF2\x05\x40'
     pronoun_mapping = {
         "You have ": player_text + " ",
         "You are ":  player_text + " is ",
@@ -1102,10 +1104,19 @@ def make_player_message(text):
     for find_text, replace_text in verb_mapping.items():
         new_text = new_text.replace(find_text, replace_text)
 
-    wrapped_text = line_wrap(new_text, False, False, False)
-    if wrapped_text != new_text:
-        new_text = line_wrap(new_text, True, False, False)
+    acquisition = player_text + ' got '
+    if acquisition in new_text:
+        # The finder is always the save-file name; F7 adds the remote recipient.
+        prefix, item_text = new_text.split(acquisition, 1)
+        codes = parse_control_codes(item_text)
+        for index, code in enumerate(codes):
+            if code.code in (ord('!'), ord('.')):
+                codes[index:index] = parse_control_codes('\x05\x42\xF7\x05\x40')
+                break
+        new_text = prefix + '\x05\x42\x0F\x05\x40 got ' + ''.join(code.get_string() for code in codes)
 
+    # AP names and recipient suffixes are expanded and wrapped at runtime,
+    # using the actual recipient name (including updates from the client).
     return new_text
 
 
@@ -1114,7 +1125,8 @@ def make_player_message(text):
 def update_item_messages(messages, player_count):
     new_item_messages = {**ITEM_MESSAGES, **IMPORTANT_ITEM_MESSAGES}
     for id, text in new_item_messages.items():
-        if player_count > 1:
+        # Cross-game messages already identify the recipient after "for".
+        if player_count > 1 and id not in (0x90B6, 0x90B7):
             update_message_by_id(messages, id, make_player_message(text), 0x23)
         else:
             update_message_by_id(messages, id, text, 0x23)
