@@ -165,7 +165,8 @@ def get_item_hint_text(item: Item, world: 'OOTWorld') -> str:
 def get_remote_world_display(local_player: int, other_player: Optional[int]) -> Optional[int]:
     if other_player is None or other_player == local_player:
         return None
-    return other_player + 1
+    # APWorld required change: AP Player IDs already start with 1
+    return other_player
 
 
 def is_major_item(item: Item) -> bool:
@@ -732,7 +733,8 @@ def get_goal_hint(world: 'OOTWorld', checked: set[str]) -> HintReturn:
         player_text = "the"
         goal_text = goal.hint_text
     else:
-        player_text = "Player %s's" % (world_id + 1)
+        # APWorld required change: AP Player IDs already start with 1
+        player_text = "Player %s's" % world_id
         other_world = world.multiworld.worlds[world_id]
         if hasattr(other_world, 'goal_categories') and other_world.goal_categories and goal_category.name in other_world.goal_categories:
             goal_text = other_world.goal_categories[goal_category.name].get_goal(goal.name).hint_text
