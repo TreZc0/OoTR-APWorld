@@ -50,10 +50,18 @@ static uint32_t append_owner(uint32_t pos) {
 
 static uint32_t expand_message(const uint8_t* raw, uint32_t length) {
     uint32_t out = 0;
+    uint8_t outgoing_acquisition = 0, hide_description = 0;
     for (uint32_t i = 0; i < length && out < EXPANDED_SIZE - 5;) {
         uint8_t c = raw[i];
         uint32_t size = code_size(c);
         if (c == 0x02 || i + size > length) break;
+        // Keep textbox endings (including event, fade and ocarina controls),
+        // but omit follow-up effects and instructions for somebody else's item.
+        if (hide_description && c != 0x07 && c != 0x09 && c != 0x0A
+                && c != 0x0B && c != 0x0E && c != 0x10) {
+            i += size;
+            continue;
+        }
         if (c == 0x0F) {
             out = append_save_name(out);
         } else if (c == 0xF2) {
@@ -62,6 +70,7 @@ static uint32_t expand_message(const uint8_t* raw, uint32_t length) {
             if (PLAYER_NAME_ID != PLAYER_ID) {
                 out = append_string(out, (uint8_t*)" for ", 5);
                 out = append_owner(out);
+                outgoing_acquisition = 1;
             }
         } else if (c == 0xF0 && raw[i + 1] == 0xFF) {
             out = append_string(out, (uint8_t*)ap_item_names_get_active_name(), AP_ACTIVE_ITEM_NAME_SIZE - 1);
@@ -70,6 +79,9 @@ static uint32_t expand_message(const uint8_t* raw, uint32_t length) {
         } else {
             for (uint32_t j = 0; j < size; j++) expanded[out++] = raw[i + j];
         }
+        // F7 is inserted immediately before the acquisition sentence's final
+        // punctuation. Names are expanded above, so punctuation in them is safe.
+        if (outgoing_acquisition && (c == '!' || c == '.')) hide_description = 1;
         i += size;
     }
     expanded[out++] = 0x02;

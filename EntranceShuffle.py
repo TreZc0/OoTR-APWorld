@@ -457,6 +457,9 @@ def invalidate_age_reachability(state, player):
     state.adult_blocked_connections[player] = set()
     state.day_reachable_regions[player] = set()
     state.dampe_reachable_regions[player] = set()
+    state.reachable_regions[player] = set()
+    state.blocked_connections[player] = set()
+    state.stale[player] = True
     state._oot_stale[player] = True
 
 

@@ -13,11 +13,11 @@ logger = logging.getLogger("Ocarina of Time")
 
 from .Location import OOTLocation, LocationFactory, location_name_to_id, build_location_name_groups
 from .Entrance import OOTEntrance
-from .EntranceShuffle import shuffle_random_entrances, entrance_shuffle_table, EntranceShuffleError
+from .EntranceShuffle import shuffle_random_entrances, entrance_shuffle_table, EntranceShuffleError, invalidate_age_reachability
 from .HintList import getRequiredHints
 from .Hints import HintArea, HintAreaNotFound, hint_dist_keys, get_hint_area, buildWorldGossipHints, populate_misc_hint_data
 from .Items import OOTItem, item_table, oot_data_to_ap_id, oot_is_item_of_type, REWARD_COLORS, REWARD_TO_DUNGEON
-from .ItemPool import generate_itempool, get_junk_item, get_junk_pool
+from .ItemPool import generate_itempool, get_junk_item, get_junk_pool, get_skipped_adult_trade_items, trade_items
 from .Regions import OOTRegion, TimeOfDay
 from .Rules import set_rules, set_shop_rules, set_entrances_based_rules
 from .RuleParser import Rule_AST_Transformer
@@ -32,6 +32,7 @@ from .appp import OoTProcedurePatch
 from .appp.generate import build_patch_data
 from .ut import apply_replay_options, serialize_generation_results, serialize_slot_options
 from .ut.entrances import FOUND_ENTRANCES_KEY, defer_entrances, reconnect_found_entrances, restore_entrances
+from .ut.shops import restore_shop_items
 
 from BaseClasses import MultiWorld, CollectionState, Tutorial
 from Options import Range, Toggle, VerifyKeys, Accessibility, PlandoConnections, PlandoItems
@@ -771,6 +772,9 @@ class OOTWorld(World):
     # Reads a group of regions from the given JSON file.
     def load_regions_from_json(self, file_path):
         region_json = read_json(file_path)
+        # The ROM pre-completes these trade-ins without granting their rewards.
+        # Exclude them from AP so connecting cannot award phantom trade items.
+        skipped_trade_rewards = trade_items[1:len(get_skipped_adult_trade_items(self)) + 1]
 
         for region in region_json:
             new_region = OOTRegion(region['region_name'], self.player, self.multiworld)
@@ -797,6 +801,8 @@ class OOTWorld(World):
             if 'locations' in region:
                 for location, rule in region['locations'].items():
                     new_location = LocationFactory(location, self.player)
+                    if new_location.vanilla_item in skipped_trade_rewards:
+                        continue
                     if new_location.type in ['HintStone', 'Hint']:
                         continue
                     new_location.parent_region = new_region
@@ -1352,6 +1358,8 @@ class OOTWorld(World):
     def create_items(self):
         # Generate itempool
         generate_itempool(self)
+        if self.ut_replay_slot_data is not None:
+            restore_shop_items(self, self.ut_replay_results['shop_items'])
         self.prepare_empty_dungeon_rewards()
         self.add_starting_hearts()
         self.prepare_rauru_reward()
@@ -1461,6 +1469,8 @@ class OOTWorld(World):
                     break
 
         set_rules(self)
+        if self.ut_replay_slot_data is not None:
+            set_shop_rules(self)
         set_entrances_based_rules(self)
 
 
@@ -1686,13 +1696,7 @@ class OOTWorld(World):
             # age/time reachability caches are monotonic, so clear them before
             # checking candidate locations or a stricter trial can inherit access
             # from a less restricted one.
-            state.child_reachable_regions[self.player] = set()
-            state.adult_reachable_regions[self.player] = set()
-            state.child_blocked_connections[self.player] = set()
-            state.adult_blocked_connections[self.player] = set()
-            state.day_reachable_regions[self.player] = set()
-            state.dampe_reachable_regions[self.player] = set()
-            state._oot_stale[self.player] = True
+            invalidate_age_reachability(state, self.player)
             for item in placed_prefill_items:
                 if id(item) in excluded_item_ids:
                     continue
@@ -2505,20 +2509,12 @@ class OOTWorld(World):
                 if state.prog_items[self.player][boss_key] < 1:
                     del (state.prog_items[self.player][boss_key])
             # invalidate caches, nothing can be trusted anymore now
-            state.child_reachable_regions[self.player] = set()
-            state.child_blocked_connections[self.player] = set()
-            state.adult_reachable_regions[self.player] = set()
-            state.adult_blocked_connections[self.player] = set()
-            state._oot_stale[self.player] = True
+            invalidate_age_reachability(state, self.player)
             return True
         changed = super().remove(state, item)
         if changed:
             # invalidate caches, nothing can be trusted anymore now
-            state.child_reachable_regions[self.player] = set()
-            state.child_blocked_connections[self.player] = set()
-            state.adult_reachable_regions[self.player] = set()
-            state.adult_blocked_connections[self.player] = set()
-            state._oot_stale[self.player] = True
+            invalidate_age_reachability(state, self.player)
         return changed
 
 

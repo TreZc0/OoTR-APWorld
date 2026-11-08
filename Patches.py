@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from .appp.context import PatchContext
 
 from .Items import OOTItem, item_table
-from .ItemPool import trade_items
+from .ItemPool import trade_items, get_skipped_adult_trade_items
 from .Location import DisableType
 from .LocationList import business_scrubs
 from .Hints import HintArea
@@ -1042,17 +1042,7 @@ def patch_rom(context: "PatchContext", rom: Rom):
     # Mark unreachable adult trade-ins as already traded when the quest starts mid-chain.
     if not context.adult_trade_shuffle and context.adult_trade_start:
         traded_flags = 0
-        reverting_item_map = {
-            "Cojiro": ["Odd Mushroom"],
-            "Prescription": ["Eyeball Frog", "Eyedrops"],
-        }
-        trade_item = getattr(context, 'adult_trade_starting_inventory', '') or context.selected_adult_trade_item
-        for item_name in trade_items:
-            if item_name in reverting_item_map and not context.disable_trade_revert:
-                if trade_item in reverting_item_map[item_name]:
-                    break
-            if item_name == trade_item:
-                break
+        for item_name in get_skipped_adult_trade_items(context):
             traded_flags |= 0x1 << (trade_items.index(item_name) + 11)
         save_context.write_bytes(0x00D4 + 0x62 * 0x1C + 0x04 * 0x04, traded_flags.to_bytes(4, byteorder='big'))
 
