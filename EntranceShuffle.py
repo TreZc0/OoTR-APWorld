@@ -892,6 +892,16 @@ def validate_world(ootworld, entrance_placed, locations_to_ensure_reachable, all
             finally:
                 all_state.age[player] = stored_age
 
+            if (ootworld.open_kakariko == 'zelda'
+                    and 'Zeldas Letter' not in ootworld.shuffle_child_trade
+                    and not ootworld.skip_child_zelda):
+                # APWorld change: the child route to Zelda must not depend on
+                # the letter opening Kakariko's gate.
+                letter_state = ootworld.get_state_with_complete_itempool(assume_zeldas_letter=False)
+                letter_state.sweep_for_advancements(locations=ootworld.get_locations())
+                if not letter_state.has('Zeldas Letter', player):
+                    raise EntranceShuffleError("Zelda's Letter is locked behind Kakariko's gate")
+
     if ootworld.shuffle_interior_entrances and (ootworld.misc_hints or ootworld.hints != 'none') and \
         (entrance_placed == None or entrance_placed.type in ['Interior', 'SpecialInterior']):
         # Ensure Kak Potion Shop entrances are in the same hint area so there is no ambiguity as to which entrance is used for hints

@@ -970,6 +970,8 @@ class OOTWorld(World):
         # one copy from the pool and substitutes junk - so all 8 other rewards remain.
         self.rauru_starting_item = None
         self.rauru_free_post_fill = False
+        self._rauru_starting_reward = None
+        self._rauru_reward_can_retry = False
 
         if self.skip_reward_from_rauru == 'not_free':
             return
@@ -997,6 +999,7 @@ class OOTWorld(World):
                 self.item_name_groups['rewards'] - set(getattr(self, 'empty_dungeon_starting_rewards', []))))
             self.rauru_starting_item = reward_name
             self._claim_rauru_starting(reward_name, rauru_location)
+            self._rauru_reward_can_retry = True
             return
 
         if mode in ('dungeon', 'regional'):
@@ -1025,11 +1028,31 @@ class OOTWorld(World):
     def _claim_rauru_starting(self, reward_name: str, rauru_location):
         """Push a chosen reward as starting inventory and mark Rauru as a non-sendable check."""
         self.hinted_dungeon_reward_locations[reward_name] = None
-        self.multiworld.push_precollected(self.create_item(reward_name))
+        self._rauru_starting_reward = self.create_item(reward_name)
+        self.multiworld.push_precollected(self._rauru_starting_reward)
         rauru_location.address = None
         rauru_location.show_in_spoiler = False
         if rauru_location in rauru_location.parent_region.locations:
             rauru_location.parent_region.locations.remove(rauru_location)
+
+    def _replace_rauru_starting_reward(self, reward):
+        """Commit a successful reward retry without replacing a user's starting item."""
+        previous = self._rauru_starting_reward
+        if reward is previous:
+            return
+
+        precollected = self.multiworld.precollected_items[self.player]
+        index = next(index for index, item in enumerate(precollected) if item is previous)
+        precollected[index] = reward
+        self.multiworld.state.remove(previous)
+        self.multiworld.state.collect(reward, prevent_sweep=True)
+
+        self.starting_items[previous.name] -= 1
+        if not self.starting_items[previous.name]:
+            del self.starting_items[previous.name]
+        self.starting_items[reward.name] += 1
+        self.rauru_starting_item = reward.name
+        self._rauru_starting_reward = reward
 
     def _can_be_rauru_starting_item(self, item) -> bool:
         if item.name == 'Nothing':
@@ -1245,20 +1268,41 @@ class OOTWorld(World):
         if not locations or self.logic_rules == 'no_logic':
             return
 
-        rewards = [location.item for location in locations]
+        original_rewards = [location.item for location in locations]
+        rewards = original_rewards[:]
+        # Include Rauru's starting reward in retries so a starting medallion cannot lock out three stones
+        rauru_reward = self._rauru_starting_reward if self._rauru_reward_can_retry else None
+        candidate_rauru = rauru_reward
+        if rauru_reward is not None:
+            rewards.append(rauru_reward)
         for attempt in range(1000):
             state = CollectionState(self.multiworld)
+            if candidate_rauru is not rauru_reward:
+                state.remove(rauru_reward)
+                state.collect(candidate_rauru, prevent_sweep=True)
             for item in self.itempool + self.pre_fill_items:
                 self.multiworld.worlds[item.player].collect(state, item)
             state.sweep_for_advancements(locations=self.get_locations())
             if state.has_group_unique('rewards', self.player, 9):
+                if rauru_reward is not None:
+                    self._replace_rauru_starting_reward(candidate_rauru)
+                    self.hinted_dungeon_reward_locations[candidate_rauru.name] = None
+                for location in locations:
+                    self.hinted_dungeon_reward_locations[location.item.name] = location
                 return
             if attempt == 999:
                 break
             self.random.shuffle(rewards)
             for location, reward in zip(locations, rewards):
                 self.multiworld.push_item(location, reward, collect=False)
-                self.hinted_dungeon_reward_locations[reward.name] = location
+            if rauru_reward is not None:
+                candidate_rauru = rewards[-1]
+                candidate_rauru.location = None
+
+        for location, reward in zip(locations, original_rewards):
+            self.multiworld.push_item(location, reward, collect=False)
+        if rauru_reward is not None:
+            rauru_reward.location = None
 
         raise FillError(f'OoT (Player {self.player}): could not find a reachable boss reward layout '
                         'after 1000 attempts.')
@@ -2574,7 +2618,7 @@ class OOTWorld(World):
 
     # Specifically ensures that only real items are gotten, not any events.
     # Entrance validation still needs the complete age-travel assumption.
-    def get_state_with_complete_itempool(self):
+    def get_state_with_complete_itempool(self, assume_zeldas_letter=True):
         all_state = CollectionState(self.multiworld)
         for item in self.itempool + self.pre_fill_items:
             self.multiworld.worlds[item.player].collect(all_state, item)
@@ -2588,7 +2632,7 @@ class OOTWorld(World):
             all_state.collect(self.create_item("Ocarina"), prevent_sweep=True)
         if 'Weird Egg' not in self.shuffle_child_trade and 'Chicken' not in self.shuffle_child_trade:
             all_state.collect(self.create_item("Weird Egg"), prevent_sweep=True)
-        if 'Zeldas Letter' not in self.shuffle_child_trade:
+        if assume_zeldas_letter and 'Zeldas Letter' not in self.shuffle_child_trade:
             all_state.collect(self.create_item("Zeldas Letter"), prevent_sweep=True)
         if self.open_door_of_time not in ('open', 'stones'):
             all_state.collect(self.create_item("Song of Time"), prevent_sweep=True)
