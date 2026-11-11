@@ -880,6 +880,18 @@ def validate_world(ootworld, entrance_placed, locations_to_ensure_reachable, all
             if not all_state.can_reach(loc, 'Location', player):
                 raise EntranceShuffleError(f'{loc} is unreachable')
 
+        if ootworld.logic_rules != 'no_logic':
+            # APWorld change: The pedestal must also
+            # be reachable at all costs.
+            stored_age = all_state.age[player]
+            try:
+                all_state.age[player] = ootworld.starting_age
+                if not ootworld.get_location('Master Sword Pedestal').can_reach(all_state):
+                    raise EntranceShuffleError(
+                        f'Master Sword Pedestal is unreachable as {ootworld.starting_age}')
+            finally:
+                all_state.age[player] = stored_age
+
     if ootworld.shuffle_interior_entrances and (ootworld.misc_hints or ootworld.hints != 'none') and \
         (entrance_placed == None or entrance_placed.type in ['Interior', 'SpecialInterior']):
         # Ensure Kak Potion Shop entrances are in the same hint area so there is no ambiguity as to which entrance is used for hints
