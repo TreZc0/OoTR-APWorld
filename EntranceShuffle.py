@@ -6,6 +6,7 @@ from BaseClasses import CollectionState
 
 from .Hints import get_hint_area, HintAreaNotFound
 from .Regions import TimeOfDay
+from .Rules import valid_oot_item_placement
 
 
 def set_all_entrances_data(multiworld, player):
@@ -901,6 +902,32 @@ def validate_world(ootworld, entrance_placed, locations_to_ensure_reachable, all
                 letter_state.sweep_for_advancements(locations=ootworld.get_locations())
                 if not letter_state.has('Zeldas Letter', player):
                     raise EntranceShuffleError("Zelda's Letter is locked behind Kakariko's gate")
+
+            # APWorld change: Stones must be collectible before time travel.
+            if (ootworld.open_door_of_time in ('stones', 'stones_sot', 'stones_oot_sot')
+                    and (ootworld.shuffle_dungeon_rewards == 'dungeon'
+                         or (ootworld.shuffle_dungeon_rewards == 'vanilla' and ootworld.starting_age == 'child'))):
+                # APWorld change: For dungeon shuffle, require an accessible placement in each stone's dungeon.
+                stone_state = CollectionState(multiworld)
+                stones = ootworld.item_name_groups['stones']
+                for item in ootworld.itempool + ootworld.pre_fill_items:
+                    if item.name not in stones:
+                        ootworld.collect(stone_state, item)
+                stone_state.sweep_for_advancements(locations=ootworld.get_locations())
+                if ootworld.shuffle_dungeon_rewards == 'dungeon':
+                    for _ in range(3):
+                        for name in sorted(stones):
+                            if stone_state.has(name, player):
+                                continue
+                            reward = ootworld.create_item(name)
+                            if any(location.item is None
+                                   and valid_oot_item_placement(location, reward)
+                                   and location.can_reach(stone_state)
+                                   for location in ootworld.get_locations()):
+                                stone_state.collect(reward, prevent_sweep=True)
+                        stone_state.sweep_for_advancements(locations=ootworld.get_locations())
+                if not stone_state.has('Time Travel', player):
+                    raise EntranceShuffleError('Spiritual stones are locked behind the Door of Time')
 
     if ootworld.shuffle_interior_entrances and (ootworld.misc_hints or ootworld.hints != 'none') and \
         (entrance_placed == None or entrance_placed.type in ['Interior', 'SpecialInterior']):

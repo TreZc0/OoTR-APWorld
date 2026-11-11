@@ -1964,11 +1964,6 @@ class OOTWorld(World):
             for song in songs:
                 song.song_main_pool_fallback = False
                 self.pre_fill_items.remove(song)
-            song_of_time = next((song for song in songs if song.name == 'Song of Time'), None)
-            song_of_time_opens_door = (
-                song_of_time is not None
-                and self.open_door_of_time not in ('open', 'stones')
-            )
 
             def place_songs(song_state, available_locations, songs_to_place, allow_main_pool_fallback=False):
                 remaining_locations = [location for location in available_locations if location.item is None]
@@ -2010,6 +2005,7 @@ class OOTWorld(World):
                             )
                             break
                         self.random.shuffle(candidates)
+                        candidates.sort(key=lambda location: location.name != 'Sheik in Ice Cavern')
                         song_candidates[song] = candidates
 
                     location_to_song = {}
@@ -2118,11 +2114,6 @@ class OOTWorld(World):
                         assume_time_travel=False,
                         assume_dungeon_rewards=False,
                     )
-                    if song_of_time_opens_door:
-                        song_of_time_state = prefill_state(
-                            song_base_state, collect_placed_items=False,
-                        )
-                        place_songs(song_of_time_state, song_locations, [song_of_time])
                     song_state = prefill_state(song_base_state, collect_placed_items=False)
                     remaining_songs = [song for song in attempt_songs if song.location is None]
                     remaining_song_locations = [location for location in song_locations if location.item is None]
@@ -2153,6 +2144,11 @@ class OOTWorld(World):
         # instead of locking them randomly before reachability-sensitive fill.
         # `anywhere` skips this stage - those rewards stay in the main itempool.
         if self.shuffle_dungeon_rewards in ('dungeon', 'regional', 'any_dungeon', 'overworld'):
+            # Rewards can unlock age travel. Obtain time travel and already placed items through their locations.
+            reward_state = CollectionState(self.multiworld)
+            for item in self.multiworld.itempool:
+                if item.player == self.player:
+                    self.collect(reward_state, item)
             reward_items = list(filter(lambda item: item.type == 'DungeonReward', self.pre_fill_items))
             placed_reward_names = {self.rauru_starting_item} if self.rauru_starting_item else set()
             reward_items = [r for r in reward_items if r.name not in placed_reward_names]
@@ -2173,7 +2169,7 @@ class OOTWorld(World):
                         f"OoT (Player {self.player}): no valid location for {reward.name} "
                         f"in {mode} reward shuffle.")
                 self.random.shuffle(candidate_locations)
-                fill_restrictive(self.multiworld, prefill_state(state), candidate_locations, [reward],
+                fill_restrictive(self.multiworld, prefill_state(reward_state, collect_placed_items=False), candidate_locations, [reward],
                     single_player_placement=True, lock=True, allow_excluded=True,
                     on_place=lambda loc: placed_prefill_items.append(loc.item))
                 self.hinted_dungeon_reward_locations[reward.name] = reward.location
