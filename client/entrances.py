@@ -1,7 +1,26 @@
 import json
 
+from .. import OOTWorld
+from ..EntranceShuffle import entrance_shuffle_table
+from ..Patches import ENTRANCE_IDS, blue_warps_are_tracked
 from ..Utils import data_path
-from .entrances import ENTRANCE_IDS, FOUND_ENTRANCES_KEY
+
+BLUE_WARP_NAMES = {
+    entrance[0]
+    for row in entrance_shuffle_table if row[0] == "BlueWarp"
+    for entrance in row[1:]
+}
+
+
+def entrance_discovery_names(slot_data):
+    options = slot_data["options"]
+    track_blue_warps = blue_warps_are_tracked(
+        options["shuffle_overworld_entrances"], options["shuffle_dungeon_entrances"], options["shuffle_bosses"],
+    )
+    return sorted(
+        name for name, record in slot_data["generation_results"]["entrances"].items()
+        if record["shuffled"] or (track_blue_warps and name in BLUE_WARP_NAMES)
+    )
 
 
 class EntranceDiscovery:
@@ -36,7 +55,7 @@ async def publish_discoveries(ctx, names):
     if not new_names:
         return
     await ctx.send_msgs([{
-        "cmd": "Set", "key": FOUND_ENTRANCES_KEY.format(team=ctx.team, player=ctx.slot),
+        "cmd": "Set", "key": OOTWorld.found_entrances_datastorage_key.format(team=ctx.team, player=ctx.slot),
         "default": {}, "want_reply": False,
         "operations": [{"operation": "update", "value": {name: True for name in new_names}}],
     }])
