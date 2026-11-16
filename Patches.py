@@ -33,6 +33,7 @@ from .ut.rom import tag_entrance
 
 AP_PROGRESSION = 0x11B
 AP_JUNK = 0x11C
+AP_FILLER = 0x11D
 AP_PROGRESSION_OBJECT = 0x1B6
 AP_JUNK_OBJECT = 0x1B7
 AP_PROGRESSION_MODEL_GRAPHIC = 0x00A5
@@ -2528,6 +2529,8 @@ def get_override_entry(ootworld, location):
         # This is an AP sendable. It's guaranteed to not be None. 
         if location.item.advancement:
             item_id = AP_PROGRESSION
+        elif location.item.filler:
+            item_id = AP_FILLER
         else:
             item_id = AP_JUNK
         ap_item_name_id = get_ap_item_name_id(ootworld, location.item.name)
